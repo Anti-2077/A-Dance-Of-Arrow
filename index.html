@@ -870,6 +870,85 @@ $('#gameSeek').oninput=e=>{
   else if(gameChart){gameRunning=true;$('#gameOverlay').classList.add('hidden');gameRAF=requestAnimationFrame(tickGame)}
 };
 
+// Final interaction fixes: horizontal hover guide and editor Play opens gameplay.
+const adoaInteractionFixStyle = document.createElement('style');
+adoaInteractionFixStyle.textContent = `
+#guides .guide:hover{border-left:1px solid #29364b!important;border-right:1px solid #202a3b!important}
+#editorHoverLine{position:absolute;left:0;right:0;height:2px;top:0;background:#4d9dff;box-shadow:0 0 8px #4d9dff99;z-index:6;pointer-events:none;display:none}
+#timeline.adoa-hovering #editorHoverLine{display:block}
+#gameStage:not(:fullscreen) .game-targets{top:68%!important;bottom:auto!important;transform:translateY(-50%)!important}
+#gameStage:not(:fullscreen) .game-target{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
+`;
+document.head.appendChild(adoaInteractionFixStyle);
+
+// The hover indicator is a horizontal time guide, not a vertical lane border.
+(function setupHorizontalHoverGuide(){
+  const tl=document.getElementById('timeline');
+  if(!tl)return;
+  let line=document.getElementById('editorHoverLine');
+  if(!line){line=document.createElement('div');line.id='editorHoverLine';tl.appendChild(line);}
+  tl.addEventListener('pointermove',e=>{
+    const r=tl.getBoundingClientRect();
+    line.style.top=Math.max(0,Math.min(r.height-2,e.clientY-r.top))+'px';
+    tl.classList.add('adoa-hovering');
+  });
+  tl.addEventListener('pointerleave',()=>tl.classList.remove('adoa-hovering'));
+})();
+
+// Notes are drawn above the receptor when their hit time is in the future, then travel
+// downward to the fixed receptor as time advances. Keep this same geometry in and out of fullscreen.
+const adoaStableTickGame = function(){
+  if(!gameRunning||!gameChart)return;
+  const t=gameElapsed+(performance.now()-gameStartAt)/1000;
+  const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
+  const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
+  const speed=Math.max(.5,Math.min(3,Number(document.getElementById('gameSpeed')?.value)||1));
+  const approach=2.2/speed;
+  const judgeY=.68;
+  const stage=document.getElementById('gameStage');
+  const height=stage?stage.clientHeight:600;
+  $('#gameClock').textContent=t.toFixed(3)+'s';
+  $('#gameStats').textContent=`${gameChart.bpm||180} BPM · ${count}레인 · 점수 ${gameScore} · 미스 ${gameMiss}`;
+  const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);
+  $('#gameSeek').max=String(Math.max(1,last+2));
+  if(!$('#gameSeek').matches(':active'))$('#gameSeek').value=String(Math.min(last+2,t));
+  const layer=$('#gameNotes');layer.innerHTML='';layer.style.setProperty('--game-lane-count',count);
+  for(let i=0;i<list.length;i++){
+    const n=list[i],noteTime=Math.max(0,Number(n.time)||0),dt=noteTime-t;
+    if(gameHit.has(i)||gameMissed.has(i))continue;
+    if(dt < -.18){gameMissed.add(i);gameMiss++;continue;}
+    if(dt>approach)continue;
+    const lane=Math.max(0,Math.min(count-1,Number(n.lane)||0));
+    const el=document.createElement('div');el.className='game-note';
+    el.style.left=`${((lane+.5)/count)*100}%`;
+    // dt=approach => above screen; dt=0 => centered on the receptor at 68% height.
+    el.style.top=`${Math.max(-40,(judgeY-(dt/approach)*judgeY)*height)}px`;
+    el.style.width=`calc(100% / ${count} - 4px)`;el.style.height='auto';el.style.aspectRatio='1';
+    layer.appendChild(el);
+  }
+  if(t>last+1.5){gameRunning=false;if(gameAudio)gameAudio.pause();$('#gameOverlay').classList.remove('hidden');$('#gameOverlay').textContent=`플레이 완료! 점수 ${gameScore} · 미스 ${gameMiss}`;return;}
+  gameRAF=requestAnimationFrame(adoaStableTickGame);
+};
+tickGame=adoaStableTickGame;
+
+// Pressing Play inside the editor now opens the dedicated gameplay screen and starts there.
+$('#playAudio').onclick=()=>{
+  const chart=(typeof chartSnapshot==='function')?chartSnapshot():window.ADOAChartBridge.getCurrentChart();
+  if(!chart||!Array.isArray(chart.notes)){toast('먼저 채보를 만들어 주세요.');return;}
+  const title=(typeof currentProjectName==='string'&&currentProjectName&&currentProjectName!=='새 프로젝트')?currentProjectName:'에디터 채보';
+  const sourceUrl=(typeof audioUrl==='string'&&audioUrl)?audioUrl:null;
+  // Stop the editor's silent/audio preview so it cannot move the editor viewport behind gameplay.
+  try{if(audio)audio.pause();}catch{}
+  editorPlaying=false;cancelAnimationFrame(editorClockRAF);
+  selectGameChart({title,artist:'에디터 미리보기',chart,audioUrl:sourceUrl,source:'editor-preview'});
+  show('game');
+  requestAnimationFrame(()=>{
+    const stage=document.getElementById('gameStage');
+    try{if(stage?.requestFullscreen)stage.requestFullscreen().catch(()=>{});}catch{}
+    startGame();
+  });
+};
+
 })();
 </script>
 <script type="module">
