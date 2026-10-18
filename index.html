@@ -19,6 +19,38 @@
 .project-modal h2{margin:0 0 8px}.project-modal p{color:var(--muted);font-size:13px;line-height:1.5}.project-list{display:flex;flex-direction:column;gap:8px;margin:14px 0}.project-row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px;background:#0b1018;border:1px solid var(--line);border-radius:9px}.project-row .meta{min-width:0;overflow-wrap:anywhere}.project-modal input{width:100%;margin:8px 0;background:#090e16;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px}.project-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.project-actions button{flex:1}
 
 </style>
+
+<style id="adoa-game-receptor-size-fix">
+/* Gameplay receptor squares: fill almost the entire lane and align their centers to the fixed judgement line. */
+#gameStage #gameTargets.game-targets {
+  position: absolute !important;
+  left: 0 !important; right: 0 !important;
+  top: 68% !important; bottom: auto !important;
+  transform: translateY(-50%) !important;
+  display: grid !important;
+  grid-template-columns: repeat(var(--game-lane-count, 8), minmax(0, 1fr)) !important;
+  align-items: center !important;
+  z-index: 4 !important;
+  pointer-events: none !important;
+}
+#gameStage #gameTargets .game-target {
+  width: calc(100% - 8px) !important;
+  max-width: none !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1 !important;
+  box-sizing: border-box !important;
+  justify-self: center !important;
+  align-self: center !important;
+  margin: 0 !important;
+  position: relative !important;
+}
+#gameStage #gameTargets .game-target.pressed {
+  background: #1b665f !important;
+  border-color: #238b80 !important;
+  box-shadow: inset 0 0 12px #0008 !important;
+}
+</style>
+
 </head>
 <body>
 <header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">로그인 전</div></header>
