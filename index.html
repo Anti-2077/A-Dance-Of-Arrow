@@ -935,7 +935,7 @@ function adoApplyTimedVisualEvents(chartTime){
 const adoaStableTickGame = function(){
   if(!gameRunning||!gameChart)return;
   const t=gameElapsed+(performance.now()-gameStartAt)/1000;
-  adoApplyTimedVisualEvents(t+(Number(gameChart.offset??offset)||0)/1000);
+  adoApplyTimedVisualEvents(t-(Number(gameChart.offset??offset)||0)/1000);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
@@ -1178,7 +1178,7 @@ startGame=function(){
 function adoTickGame(){
   if(!gameRunning||!gameChart)return;
   const t=gameElapsed+(performance.now()-gameStartAt)/1000;
-  const effectiveT=t+(Number(gameChart.offset??offset)||0)/1000;
+  const effectiveT=t-(Number(gameChart.offset??offset)||0)/1000;
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
@@ -1226,7 +1226,7 @@ function adoGameKeyHandler(e){
   e.preventDefault();e.stopImmediatePropagation();
   if(e.repeat || adoHeldKeys.has(e.key))return;
   adoHeldKeys.add(e.key);adoRefreshHeldKeys();
-  const list=Array.isArray(gameChart.notes)?gameChart.notes:[],t=gameElapsed+(performance.now()-gameStartAt)/1000+(Number(gameChart.offset??offset)||0)/1000;
+  const list=Array.isArray(gameChart.notes)?gameChart.notes:[],t=gameElapsed+(performance.now()-gameStartAt)/1000-(Number(gameChart.offset??offset)||0)/1000;
   let best=-1,bestError=Infinity;
   for(let i=0;i<list.length;i++){if(gameHit.has(i)||gameMissed.has(i)||Number(list[i].lane)!==lane)continue;const err=(t-(Number(list[i].time)||0))*1000;if(Math.abs(err)<=100&&Math.abs(err)<Math.abs(bestError)){best=i;bestError=err;}}
   if(best<0)return;
@@ -1487,7 +1487,7 @@ async function refreshCharts(){
     window.adoTickGame=function(){
       const rawT=(Number(window.gameElapsed)||0)+(window.gameRunning&&Number.isFinite(window.gameStartAt)?(performance.now()-window.gameStartAt)/1000:0);
       // Match the note travel clock, including chart offset, so an event lands when its note reaches the receptor.
-      const t=rawT+(Number(window.gameChart?.offset??window.offset)||0)/1000;
+      const t=rawT-(Number(window.gameChart?.offset??window.offset)||0)/1000;
       const transform=effectTransform(t);
       ['gameLanes','gameTargets','gameNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.transform=transform;});
       // Editor timeline preview keeps the authored timeline intact; these effects run in its play screen.
@@ -2080,3 +2080,112 @@ async function refreshCharts(){
 
 </body>
 </html>
+
+<!-- ADOA reliability patch: thin, clickable beat guides; reliable note geometry; delayed chart start. -->
+<script>
+(function adoFinalReliabilityPatch(){
+  const $=id=>document.getElementById(id);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const speed=()=>clamp(Number($('gameSpeed')?.value)||1,.5,10);
+  const bpm=()=>Math.max(1,Number($('bpm')?.value)||180);
+  const subdiv=()=>Math.max(1,Number($('subdivision')?.value)||4);
+  const dur=()=>Math.max(1,Number(window.adoaWorldHeight&&$('chartDurationInput')?.value ? $('chartDurationInput').value : (typeof editorViewDuration==='function'?editorViewDuration():90)));
+  const pps=()=>80*speed();
+  const vh=()=>Math.max(1,$('timeline')?.clientHeight||560);
+  const jY=()=>vh()*.88;
+  const wh=()=>dur()*pps()+jY();
+  const step=()=>60/bpm()/subdiv();
+  const css=document.createElement('style');
+  css.textContent=`
+    #editor #adoaBeatGrid{z-index:4!important;overflow:visible!important;pointer-events:none!important}
+    #editor #adoaBeatGrid .adoa-beat-guide{position:absolute;left:0;right:0;height:10px!important;margin-top:-5px!important;background:transparent!important;pointer-events:auto!important;z-index:4;cursor:crosshair}
+    #editor #adoaBeatGrid .adoa-beat-guide::before{content:"";position:absolute;left:0;right:0;top:4.5px;height:1px;background:#334158;pointer-events:none}
+    #editor #adoaBeatGrid .adoa-beat-guide.major::before{top:4px;height:2px;background:#8293b4}
+    #editor #adoaBeatGrid .adoa-beat-guide:hover::before{height:2px;top:4px;background:#43d9c4;box-shadow:0 0 5px #43d9c4aa}
+    #editor #guides{z-index:1!important;pointer-events:none!important}
+    #editor #notes{z-index:5!important;pointer-events:none!important;overflow:visible!important}
+    #editor #notes .note{position:absolute!important;display:block!important;pointer-events:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;min-width:24px;min-height:24px;z-index:10;border:2px solid #f4f7ff!important;box-shadow:0 1px 5px #000b,0 0 7px #7e96ff66!important}
+    #editor #timeline{position:relative!important;overflow:hidden!important}
+    #gameStage .game-lanes,#gameStage .game-targets{left:5%!important;right:5%!important;width:90%!important}
+    #gameStage .game-targets{top:68%!important;bottom:auto!important;transform:translateY(-50%)!important}
+    #gameStage .game-judge-line{left:5%!important;right:5%!important;width:90%!important;top:68%!important;bottom:auto!important}
+    #gameStage .game-note{transform:translate(-50%,-50%)!important;aspect-ratio:1!important;height:auto!important;box-sizing:border-box!important}
+  `;
+  document.head.appendChild(css);
+
+  // Replace only our generated guide grid; event delegation survives rebuilds and every line is clickable.
+  const oldBuild=window.buildGuides;
+  window.buildGuides=function(){
+    if(typeof oldBuild==='function')oldBuild();
+    const timeline=$('timeline'),laneLayer=$('guides'),notesLayer=$('notes');
+    if(!timeline||!laneLayer||!notesLayer)return;
+    let grid=$('adoaBeatGrid');
+    if(!grid){grid=document.createElement('div');grid.id='adoaBeatGrid';grid.setAttribute('aria-label','박자 가이드라인');timeline.insertBefore(grid,laneLayer);}
+    const duration=dur(),scale=pps(),height=wh(),beat=step();
+    const nLines=Math.min(12000,Math.floor(duration/beat+1e-7));
+    grid.innerHTML='';Object.assign(grid.style,{position:'absolute',left:'0',right:'0',top:'0',width:'100%',height:height+'px',pointerEvents:'none',zIndex:'4'});
+    const fragment=document.createDocumentFragment();
+    for(let i=0;i<=nLines;i++){
+      const time=i*beat,line=document.createElement('div');
+      line.className='adoa-beat-guide'+(i%subdiv()===0?' major':'');
+      line.dataset.time=String(time);line.style.top=(height-time*scale)+'px';
+      line.title=`${(time*1000).toFixed(0)} ms · 클릭해 채보 추가`;
+      fragment.appendChild(line);
+    }
+    grid.appendChild(fragment);
+    laneLayer.style.gridTemplateColumns=`repeat(${clamp(Number($('keyCount')?.value)||8,1,8)},minmax(0,1fr))`;
+    notesLayer.style.setProperty('--lane-count',String(clamp(Number($('keyCount')?.value)||8,1,8)));
+    const seek=$('seek'),t=clamp(Number(seek?.value)||0,0,duration());
+    window.updateEditorViewport?.(t);
+  };
+
+  const gridClick=e=>{
+    const line=e.target.closest?.('.adoa-beat-guide');
+    if(!line)return;
+    e.preventDefault();e.stopPropagation();
+    const timeline=$('timeline'),rect=timeline.getBoundingClientRect();
+    const count=clamp(Number($('keyCount')?.value)||8,1,8);
+    const x=clamp(e.clientX-rect.left,0,Math.max(0,rect.width-.01));
+    const lane=clamp(Math.floor(x/Math.max(1,rect.width)*count),0,count-1);
+    const time=clamp(Number(line.dataset.time)||0,0,dur());
+    if(typeof window.pushUndo==='function')window.pushUndo();
+    if(typeof window.addNote==='function')window.addNote({time,lane,pos:typeof window.positionFromTime==='function'?window.positionFromTime(time):time/dur(),speed:speed()});
+    if(typeof window.setProjectDirty==='function')window.setProjectDirty();
+    window.renderNotes?.();
+  };
+  if(!$('adoaBeatGridClickInstalled')){
+    // Keep a marker off-DOM; listener is attached once to the grid when it exists.
+    window.__adoaBeatGridClickInstalled=true;
+    const attach=()=>{const g=$('adoaBeatGrid');if(g&&!g.dataset.clickBound){g.addEventListener('click',gridClick,true);g.dataset.clickBound='1';}};
+    const prior=window.buildGuides;
+    window.buildGuides=function(){prior();attach();};
+    attach();
+  }
+
+  // Render note coordinates from the same time-to-pixel equation as guides. Never rely on % top.
+  const priorRender=window.renderNotes;
+  window.renderNotes=function(){
+    if(typeof priorRender==='function')priorRender();
+    const layer=$('notes');if(!layer)return;
+    const list=typeof notes!=='undefined'&&Array.isArray(notes)?notes:[];
+    const height=wh(),scale=pps(),count=clamp(Number($('keyCount')?.value)||8,1,8);
+    layer.style.height=height+'px';layer.style.width='100%';layer.style.display='block';
+    const els=[...layer.querySelectorAll('.note')];
+    els.forEach((el,i)=>{
+      const n=list[i];if(!n)return;
+      const time=Math.max(0,Number(n.time)||0),lane=clamp(Number(n.lane)||0,0,count-1);
+      el.dataset.time=String(time);el.dataset.lane=String(lane);
+      el.style.left=`${((lane+.5)/count)*100}%`;
+      el.style.top=`${height-time*scale}px`;
+      el.style.bottom='auto';el.style.width=`min(34px, calc(100% / ${count} - 4px))`;
+      el.style.height='28px';el.style.zIndex=String(20+Math.round(height-time*scale));
+    });
+    window.updateEditorViewport?.(Number($('seek')?.value)||0);
+  };
+
+  // Rebuild guide geometry after settings change; keep it bounded for long charts.
+  ['bpm','subdivision','keyCount','chartDurationInput','gameSpeed'].forEach(id=>$(id)?.addEventListener('input',()=>{window.buildGuides?.();window.renderNotes?.();}));
+  window.addEventListener('resize',()=>{window.buildGuides?.();window.renderNotes?.();});
+  requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});
+})();
+</script>
