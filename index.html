@@ -118,12 +118,12 @@
   <button id="saveProject" class="primary">프로젝트 저장</button><button id="saveChart">채보 JSON 내보내기</button>
  </div>
  <div class="workspace">
-  <div class="panel timeline-wrap"><div class="timeline" id="timeline"><div class="guide-layer" id="guides"></div><div class="note-layer" id="notes"></div><div class="editor-targets" id="editorTargets"></div></div><div class="timeline-foot"><span id="now">0.000s</span><input id="seek" type="range" min="0" max="100" value="0"><span id="duration">음악 파일 선택 사항</span></div><div class="help">화면은 좌우 1~8레인, 위에서 아래로 시간이 흐릅니다. 그리드를 클릭하면 노트가 추가됩니다. 노트 선택 후 ↑/↓ 키 또는 시간 입력으로 세로 위치를 미세 조정할 수 있어요. 음악 파일 없이도 재생 버튼으로 내부 시계를 테스트할 수 있습니다.</div></div>
+  <div class="panel timeline-wrap"><div class="timeline" id="timeline"><div class="guide-layer" id="guides"></div><div class="note-layer" id="notes"></div><div class="editor-targets" id="editorTargets"></div></div><div class="timeline-foot"><span id="now">0.000s</span><input id="seek" type="range" min="0" max="100" value="0"><span id="duration">음악 파일 선택 사항</span><label class="editor-offset-control">오프셋(ms) <input id="editorOffsetMs" type="number" step="1" value="0" style="width:90px"></label></div><div class="help">화면은 좌우 1~8레인, 위에서 아래로 시간이 흐릅니다. 그리드를 클릭하면 노트가 추가됩니다. 노트 선택 후 ↑/↓ 키 또는 시간 입력으로 세로 위치를 미세 조정할 수 있어요. 음악 파일 없이도 재생 버튼으로 내부 시계를 테스트할 수 있습니다.</div></div>
   <div class="panel side-controls"><h3>선택한 노트</h3><div id="selectedInfo" class="muted">노트를 선택하면 세부 정보가 표시됩니다.</div><label>정확한 시간 (초)<input id="noteTime" type="number" step="0.001" value="0"></label><label>레인<select id="noteLane"><option value="0" selected>1번 레인</option><option value="1">2번 레인</option><option value="2">3번 레인</option><option value="3">4번 레인</option><option value="4">5번 레인</option><option value="5">6번 레인</option><option value="6">7번 레인</option><option value="7">8번 레인</option></select></label><div class="row"><button id="nudgeBack">−1ms</button><button id="nudgeForward">+1ms</button></div><button id="deleteNote" class="wide">선택 노트 삭제</button><div class="row"><button id="undo" class="wide">↶ 실행 취소</button><button id="redo" class="wide">↷ 다시 실행</button></div></div>
  </div>
  <div class="lower-grid">
   <div class="panel"><h3>판정선 / 키 수 변경 이벤트</h3><p class="muted">특정 시간에 적용할 키 수와 판정선 위치 이벤트를 기록합니다.</p><div class="event-form"><input id="eventTime" type="number" min="0" step=".001" value="0" placeholder="시간(초)"><select id="eventKeys"><option value="4">4키</option><option value="6">6키</option><option value="8">8키</option></select><input id="lineX" type="number" min="0" max="100" value="50" placeholder="판정선 X%"><button id="addEvent">이벤트 추가</button></div><div class="list" id="eventList"></div></div>
-  <div class="panel"><h3>화면 / 이미지 이펙트</h3><p class="muted">이벤트 시간은 밀리초 단위로 지정합니다. 노트를 미리 눌러도 효과는 정해진 음악 시간에 발생합니다.</p><div class="event-form"><label>발생 시간(ms) <input id="effectTime" type="number" min="0" step="1" value="0" placeholder="시간(ms)"></label><select id="effectType"><option>화면 흔들림</option><option>확대</option><option>축소</option><option>회전</option><option>좌우 반전</option><option>상하 반전</option></select><label>강도 <input id="effectValue" type="number" step="1" value="15" title="회전은 도, 확대/축소는 퍼센트"></label><label>지속(ms) <input id="effectDuration" type="number" min="1" step="1" value="500" title="효과 지속 시간(ms)"></label><button id="addEffect">이펙트 추가</button></div><div class="list" id="effectList"></div><label class="filebutton" style="margin-top:12px">이미지 불러오기<input id="imageFiles" type="file" accept="image/*" multiple></label><div class="list" id="imageList"></div></div>
+  <div class="panel"><h3>화면 / 이미지 이펙트</h3><p class="muted">이벤트 시간은 밀리초 단위로 지정합니다. 노트를 미리 눌러도 효과는 정해진 음악 시간에 발생합니다.</p><div class="event-form"><label>발생 시간(ms) <input id="effectTime" type="number" min="0" step="1" value="0" placeholder="시간(ms)"></label><select id="effectType"><option>화면 흔들림</option><option>확대</option><option>축소</option><option>회전</option><option>좌우 반전</option><option>상하 반전</option></select><label id="effectValueLabel">목표값(%) <input id="effectValue" type="number" step="1" value="150" title="확대/축소는 목표 배율(%) 예: 150 또는 50, 회전은 목표 각도(도)"></label><label>지속(ms) <input id="effectDuration" type="number" min="1" step="1" value="500" title="효과 지속 시간(ms)"></label><button id="addEffect">이펙트 추가</button></div><div class="list" id="effectList"></div><label class="filebutton" style="margin-top:12px">이미지 불러오기<input id="imageFiles" type="file" accept="image/*" multiple></label><div class="list" id="imageList"></div></div>
  </div>
 </section>
 <section id="settings" class="screen">
@@ -820,7 +820,7 @@ if(!document.getElementById('gameSpeedControl')){
   const bar=document.querySelector('#saveProject')?.parentElement;
   if(bar){
     const label=document.createElement('label');label.className='game-speed-control';label.id='gameSpeedControl';
-    label.innerHTML='낙하 속도 <input id="gameSpeed" type="range" min="0.5" max="3" step="0.1" value="1"><strong id="gameSpeedValue">1.0×</strong>';
+    label.innerHTML='낙하 속도 <input id="gameSpeed" type="range" min="0.5" max="10" step="0.1" value="1"><strong id="gameSpeedValue">1.0×</strong>';
     const editorPlayButton=document.getElementById('playAudio');editorPlayButton?.insertAdjacentElement('afterend',label);
   }
 }
@@ -839,7 +839,7 @@ tickGame=function(){
   const t=gameElapsed+(now-gameStartAt)/1000;
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
-  const speed=Math.max(.5,Math.min(3,Number($('#gameSpeed')?.value)||1));
+  const speed=Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1));
   const approach=2.2/speed;
   const judgeY=.68;
   const stage=document.getElementById('gameStage');
@@ -938,7 +938,7 @@ const adoaStableTickGame = function(){
   adoApplyTimedVisualEvents(t+(Number(gameChart.offset??offset)||0)/1000);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
-  const speed=Math.max(.5,Math.min(3,Number(document.getElementById('gameSpeed')?.value)||1));
+  const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
   const approach=2.2/speed;
   const judgeY=.68;
   const stage=document.getElementById('gameStage');
@@ -1181,7 +1181,7 @@ function adoTickGame(){
   const effectiveT=t+(Number(gameChart.offset??offset)||0)/1000;
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
-  const speed=Math.max(.5,Math.min(3,Number(document.getElementById('gameSpeed')?.value)||1));
+  const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
   const approach=2.0/speed,judgeY=.68;
   const stage=document.getElementById('gameStage'),height=stage?.clientHeight||600;
   const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);
@@ -1498,6 +1498,93 @@ async function refreshCharts(){
   }
   // Also clear visual transforms whenever a new chart is selected or a run is stopped/reset.
   document.getElementById('gameRestart')?.addEventListener('click',()=>{['gameLanes','gameTargets','gameNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.transform='';});});
+})();
+
+
+/* Advanced editor timing, guide grid, and scoped animated effects. */
+(function adoAdvancedEditorEvents(){
+ const $id=id=>document.getElementById(id);
+ const speed=()=>Math.max(.5,Math.min(10,Number($id('gameSpeed')?.value)||1));
+ const originalWorldHeight=window.adoaWorldHeight;
+ window.adoaWorldHeight=function(){
+   const base= Math.max(1,(60/Math.max(1,Number($id('bpm')?.value)||180)/(Number($id('subdivision')?.value)||1))*64);
+   const dur=typeof window.editorViewDuration==='function'?window.editorViewDuration():Math.max(90,base);
+   // Faster note travel means more vertical pixels per song second; BPM changes the beat spacing.
+   return Math.max(560,560*Math.max(dur,base)/base*speed());
+ };
+ const origBuild=window.buildGuides;
+ window.buildGuides=function(){
+   if(typeof origBuild==='function')origBuild();
+   const timeline=$id('timeline'),guides=$id('guides'),notes=$id('notes'); if(!timeline||!guides)return;
+   const bpm=Math.max(1,Number($id('bpm')?.value)||180),sub=Math.max(1,Number($id('subdivision')?.value)||1);
+   const secPerBeat=60/bpm/sub;
+   const dur=typeof window.editorViewDuration==='function'?window.editorViewDuration():90;
+   const pxPerSec=560/Math.max(secPerBeat*64,1)*speed();
+   const worldH=Math.max(560,dur*pxPerSec);
+   timeline.style.setProperty('--guide-px-per-sec',pxPerSec+'px');
+   guides.style.height=worldH+'px';if(notes)notes.style.height=worldH+'px';
+   // Rebuild horizontal beat/subdivision lines at BPM-derived pixel intervals, independent of lane borders.
+   guides.querySelectorAll('.time-grid-line').forEach(n=>n.remove());
+   const stepPx=secPerBeat*pxPerSec;
+   for(let y=0,k=0;y<=worldH;y+=Math.max(1,stepPx),k++){
+     const line=document.createElement('div');line.className='adoa-beat-guide'+(k%sub===0?' major':'');line.style.top=y+'px';guides.appendChild(line);
+   }
+   const offMs=Math.max(0,Number($id('editorOffsetMs')?.value)||0),off=offMs/1000;
+   // offset skips the initial song interval in the editor viewport; notes retain their authored hit times.
+   const seek=$id('seek');if(seek){seek.max=String(Math.max(1,dur));if(!(document.activeElement===seek))seek.value=String(Math.min(dur,off));}
+   if(typeof window.updateEditorViewport==='function')window.updateEditorViewport(Math.max(off,Number(seek?.value)||0));
+ };
+ const speedInput=$id('gameSpeed');if(speedInput){speedInput.max='10';speedInput.addEventListener('input',()=>{const v=speed();const label=$id('gameSpeedValue');if(label)label.textContent=v.toFixed(1)+'×';if(typeof window.buildGuides==='function')window.buildGuides();});}
+ const off=$id('editorOffsetMs');if(off){off.addEventListener('change',()=>{const ms=Math.max(0,Number(off.value)||0);off.value=String(ms);if($id('seek'))$id('seek').value=String(ms/1000);window.buildGuides?.();});}
+ // Dynamic effect controls: scale target is an absolute percentage (150=1.5x, 50=0.5x); rotation target is degrees.
+ const type=$id('effectType'),label=$id('effectValueLabel'),val=$id('effectValue');
+ function updateEffectLabel(){if(!type||!label||!val)return;const t=type.value;const scale=['확대','축소'].includes(t);label.firstChild.textContent=scale?'목표 배율(%) ':'목표 각도(°) ';val.title=scale?'목표 화면 크기: 150=150%, 50=50%':'최종 회전 각도. 예: 20 또는 -10';if(scale&&!val.dataset.edited)val.value=t==='축소'?'50':'150';else if(t==='회전'&&!val.dataset.edited)val.value='20';}
+ val?.addEventListener('input',()=>{if(val)val.dataset.edited='1'});type?.addEventListener('change',()=>{if(val)delete val.dataset.edited;updateEffectLabel()});updateEffectLabel();
+ const add=$id('addEffect');if(add){add.addEventListener('click',()=>{const t=type?.value||'',target=Number(val?.value);if(!Number.isFinite(target))return;const last=Array.isArray(window.effects)?window.effects[window.effects.length-1]:null;},true);}
+ // Ensure the horizontal guides remain visible while lane dividers stay separate.
+ const style=document.createElement('style');style.textContent=`
+ #guides{overflow:visible!important}
+ .adoa-beat-guide{position:absolute;left:0;right:0;height:1px;background:#334158;z-index:2;pointer-events:none}
+ .adoa-beat-guide.major{height:2px;background:#7183a5;box-shadow:0 0 2px #7183a555}
+ #timeline .guide{z-index:1}
+ #gameStage{margin:24px; width:calc(100% - 48px);height:min(68vh,760px);min-height:400px;overflow:hidden;outline:1px solid #29364b;transform:none!important}
+ #gameStage #gameLanes,#gameStage #gameTargets,#gameStage #gameNotes{transform-origin:50% 50%;}
+ .editor-offset-control{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+ `;document.head.appendChild(style);
+})();
+
+// Smooth, configurable event interpolation applied only to the three game layers, never the site UI.
+(function adoPreciseVisualEventOverride(){
+ const layerIds=['gameLanes','gameTargets','gameNotes'];
+ function transformAt(t){
+   const chart=window.gameChart||{};let scale=1,rotation=0,flipX=1,flipY=1,shake=0;
+   for(const e of (Array.isArray(chart.effects)?chart.effects:[])){
+     const start=Number(e.timeMs!=null?e.timeMs/1000:e.time)||0;
+     const dur=Math.max(.001,Number(e.durationMs!=null?e.durationMs/1000:(e.duration||500)/1000));
+     const elapsed=t-start;if(elapsed<0||elapsed>=dur)continue;
+     const p=Math.max(0,Math.min(1,elapsed/dur));
+     const ease=p*p*(3-2*p);const v=Number(e.value??15);
+     switch(String(e.type||'')){
+       case '확대': scale*=1+(Math.max(1,v)/100-1)*ease;break;
+       case '축소': scale*=1+((Math.max(1,v)/100)-1)*ease;break;
+       case '회전': rotation+=v*ease;break;
+       case '좌우 반전': if(p>=.5)flipX*=-1;break;
+       case '상하 반전': if(p>=.5)flipY*=-1;break;
+       case '화면 흔들림': shake+=Math.sin(p*Math.PI*10)*(1-p)*Math.min(30,Math.abs(v));break;
+     }
+   }
+   return `translate(${shake}px,0px) rotate(${rotation}deg) scale(${scale*flipX},${scale*flipY})`;
+ }
+ const prior=window.adoTickGame;
+ if(typeof prior==='function')window.adoTickGame=function(){
+   const result=prior();
+   const raw=(Number(window.gameElapsed)||0)+(window.gameRunning&&Number.isFinite(window.gameStartAt)?(performance.now()-window.gameStartAt)/1000:0);
+   const offset=Number(window.gameChart?.offset??window.offset)||0;
+   const tr=transformAt(raw+offset/1000);
+   for(const id of layerIds){const el=document.getElementById(id);if(el)el.style.transform=tr;}
+   return result;
+ };
+ window.adoaEffectTransform=transformAt;
 })();
 </script>
 
