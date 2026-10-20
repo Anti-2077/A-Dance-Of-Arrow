@@ -1760,6 +1760,114 @@ async function refreshCharts(){
   }
 })();
 
+
+
+/* Final editor timing correction: the judgment line is the time-zero origin. */
+(function adoJudgeLineOriginAndPersistSpeed(){
+  const $=id=>document.getElementById(id);
+  const viewHeight=()=>Math.max(1,$('timeline')?.clientHeight||560);
+  const pps=()=>80*Math.max(.5,Math.min(10,Number($('gameSpeed')?.value)||1));
+  const duration=()=>Math.max(1,Number(typeof editorViewDuration==='function'?editorViewDuration():90)||90);
+  const judgeY=()=>viewHeight()*.88; // .judge-line is 12% from the bottom.
+  const worldHeight=()=>duration()*pps()+judgeY();
+  const gridTimeStep=()=>60/Math.max(1,Number($('bpm')?.value)||180)/Math.max(1,Number($('subdivision')?.value)||1);
+
+  window.adoaWorldHeight=()=>worldHeight();
+  window.updateEditorViewport=function(time){
+    const timeline=$('timeline'),guides=$('guides'),notesLayer=$('notes'),grid=$('adoaBeatGrid');
+    if(!timeline||!guides||!notesLayer)return;
+    const dur=duration(),scale=pps(),wh=worldHeight(),t=Math.max(0,Math.min(dur,Number(time)||0));
+    // worldY = worldHeight - chartTime*pxPerSecond; scroll so current time sits on the fixed judge line.
+    const scroll=(dur-t)*scale;
+    window.adoaEditorScrollOffset=scroll;
+    timeline.style.height=viewHeight()+'px';timeline.style.maxHeight=viewHeight()+'px';
+    guides.style.height=wh+'px';notesLayer.style.height=wh+'px';
+    guides.style.transform=`translateY(${-scroll}px)`;notesLayer.style.transform=`translateY(${-scroll}px)`;
+    if(grid){grid.style.height=wh+'px';grid.style.transform=`translateY(${-scroll}px)`;}
+    const seek=$('seek');if(seek){seek.max=String(dur);if(document.activeElement!==seek)seek.value=String(t);}
+    const now=$('now');if(now)now.textContent=t.toFixed(3)+'s';
+  };
+
+  const priorRender=window.renderNotes;
+  window.renderNotes=function(){
+    if(typeof priorRender==='function')priorRender();
+    const layer=$('notes');if(!layer)return;
+    const wh=worldHeight(),scale=pps();layer.style.height=wh+'px';
+    // Notes share the exact vertical coordinate as their matching horizontal guide.
+    layer.querySelectorAll('.note').forEach((el,index)=>{
+      const time=Math.max(0,Number(notes[index]?.time)||0);
+      el.style.top=(wh-time*scale)+'px';el.style.bottom='auto';
+    });
+    if(typeof window.updateEditorViewport==='function')window.updateEditorViewport(Number($('seek')?.value)||0);
+  };
+
+  const priorBuild=window.buildGuides;
+  window.buildGuides=function(){
+    if(typeof priorBuild==='function')priorBuild();
+    const timeline=$('timeline'),laneLayer=$('guides'),noteLayer=$('notes');if(!timeline||!laneLayer||!noteLayer)return;
+    let grid=$('adoaBeatGrid');if(!grid){grid=document.createElement('div');grid.id='adoaBeatGrid';grid.setAttribute('aria-label','박자 가이드라인');timeline.insertBefore(grid,laneLayer);}
+    const bpm=Math.max(1,Number($('bpm')?.value)||180),sub=Math.max(1,Number($('subdivision')?.value)||1),dur=duration(),scale=pps(),wh=worldHeight(),step=60/bpm/sub;
+    grid.innerHTML='';grid.style.height=wh+'px';grid.style.width='100%';grid.style.position='absolute';grid.style.left='0';grid.style.right='0';grid.style.top='0';grid.style.pointerEvents='none';
+    const frag=document.createDocumentFragment(),count=Math.floor(dur/step+1e-7);
+    for(let i=0;i<=count;i++){
+      const time=i*step,line=document.createElement('div');
+      line.className='adoa-beat-guide'+(i%sub===0?' major':'');
+      line.style.top=(wh-time*scale)+'px';line.dataset.time=time.toFixed(6);line.style.pointerEvents='auto';line.style.cursor='crosshair';
+      line.title=`${(time*1000).toFixed(0)} ms · 가이드라인을 클릭해 채보 추가`;
+      line.addEventListener('click',e=>{
+        e.preventDefault();e.stopPropagation();
+        const rect=timeline.getBoundingClientRect(),countLanes=Math.max(1,Math.min(8,Number($('keyCount')?.value)||8));
+        const x=Math.max(0,Math.min(rect.width-1,e.clientX-rect.left));
+        const lane=Math.max(0,Math.min(countLanes-1,Math.floor(x/rect.width*countLanes)));
+        const t=Number(line.dataset.time)||0;
+        if(typeof window.pushUndo==='function')window.pushUndo();
+        if(typeof window.addNote==='function')window.addNote({time:t,lane,pos:typeof window.positionFromTime==='function'?window.positionFromTime(t):t/dur,speed:Math.max(.5,Math.min(10,Number($('gameSpeed')?.value)||1))});
+        if(typeof window.setProjectDirty==='function')window.setProjectDirty();
+        if(typeof window.renderNotes==='function')window.renderNotes();
+      });
+      frag.appendChild(line);
+    }
+    grid.appendChild(frag);
+    // Lane divs remain as visual separators only; note creation is tied to an actual horizontal guide.
+    laneLayer.querySelectorAll('.guide').forEach(lane=>{lane.onclick=e=>{e.stopPropagation();}});
+    const laneCount=Math.max(1,Math.min(8,Number($('keyCount')?.value)||8));
+    laneLayer.style.gridTemplateColumns=`repeat(${laneCount},minmax(0,1fr))`;
+    noteLayer.style.setProperty('--lane-count',laneCount);
+    const offset=Math.max(0,Number($('editorOffsetMs')?.value)||0)/1000;
+    const t=Math.max(offset,Number($('seek')?.value)||0);
+    window.updateEditorViewport(Math.min(dur,t));
+  };
+
+  // Keep the hit line above notes; horizontal lines are clickable only on the line itself.
+  const css=document.createElement('style');css.textContent=`
+    #timeline{position:relative!important;overflow:hidden!important;height:560px!important;max-height:560px!important}
+    #adoaBeatGrid{z-index:2!important;overflow:visible;}
+    #adoaBeatGrid .adoa-beat-guide{position:absolute;left:0;right:0;height:1px;background:#334158;pointer-events:auto;z-index:2;}
+    #adoaBeatGrid .adoa-beat-guide.major{height:2px;background:#8293b4;box-shadow:0 0 2px #7183a555;}
+    #adoaBeatGrid .adoa-beat-guide:hover{background:#43d9c4;box-shadow:0 0 6px #43d9c4aa;height:3px;}
+    #guides{z-index:1!important;}#notes{z-index:3!important;}
+    #notes .note{z-index:10!important;}
+  `;document.head.appendChild(css);
+
+  // Persist chart-wide fall speed in project snapshots and exported chart data.
+  const priorSnapshot=window.chartSnapshot;
+  if(typeof priorSnapshot==='function')window.chartSnapshot=function(){const c=priorSnapshot();c.speed=Math.max(.5,Math.min(10,Number($('gameSpeed')?.value)||1));return c;};
+  const applySpeed=d=>{const v=Math.max(.5,Math.min(10,Number(d?.speed)||1)),input=$('gameSpeed');if(input){input.value=String(v);const label=$('gameSpeedValue');if(label)label.textContent=v.toFixed(1)+'×';}};
+  const priorRestore=window.restoreSnapshot;
+  if(typeof priorRestore==='function')window.restoreSnapshot=function(raw){priorRestore(raw);let d=raw;try{if(typeof raw==='string')d=JSON.parse(raw);}catch{}applySpeed(d);requestAnimationFrame(()=>window.buildGuides?.());};
+  const priorLoad=window.loadChartIntoEditor;
+  if(typeof priorLoad==='function')window.loadChartIntoEditor=function(d){priorLoad(d);applySpeed(d);requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});};
+  const priorSelect=window.selectGameChart;
+  if(typeof priorSelect==='function')window.selectGameChart=function(c){const d=c?.chart||c;applySpeed(d);return priorSelect(c);};
+
+  // Speed changes update the chart grid immediately and mark the project as modified.
+  $('gameSpeed')?.addEventListener('change',()=>{window.buildGuides?.();if(typeof window.setProjectDirty==='function')window.setProjectDirty();});
+  ['bpm','subdivision','keyCount','chartDurationInput'].forEach(id=>$(id)?.addEventListener('change',()=>{window.buildGuides?.();window.renderNotes?.();}));
+  $('editorOffsetMs')?.addEventListener('change',()=>{const t=Math.max(0,Number($('editorOffsetMs').value)||0)/1000;window.updateEditorViewport(Math.min(duration(),t));});
+  window.addEventListener('resize',()=>window.buildGuides?.());
+  requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});
+})();
+
 </script>
 
 </body>
