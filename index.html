@@ -1586,6 +1586,115 @@ async function refreshCharts(){
  };
  window.adoaEffectTransform=transformAt;
 })();
+
+
+/* Final guide-grid correction: one full-width horizontal grid, with one shared time/pixel mapping. */
+(function adoFinalGuideGridFix(){
+  const $g=id=>document.getElementById(id);
+  const oldBuildGuides=window.buildGuides;
+  const oldWorldHeight=window.adoaWorldHeight;
+  let firstGridBuild=true;
+  const pxPerSecond=()=>{
+    // The same chart-time-to-pixel scale is used by guide lines, note placement, clicks and scrolling.
+    const multiplier=Math.max(.5,Math.min(10,Number($g('gameSpeed')?.value)||1));
+    return 80*multiplier;
+  };
+  window.adoaWorldHeight=function(){
+    const dur=Math.max(1,Number(typeof window.editorViewDuration==='function'?window.editorViewDuration():90)||90);
+    return Math.max(560,dur*pxPerSecond());
+  };
+  window.updateEditorViewport=function(time){
+    const timeline=$g('timeline'),guides=$g('guides'),notesLayer=$g('notes'),grid=$g('adoaBeatGrid');
+    if(!timeline||!guides||!notesLayer)return;
+    const dur=Math.max(1,Number(typeof window.editorViewDuration==='function'?window.editorViewDuration():90)||90);
+    const worldH=window.adoaWorldHeight(),viewH=560;
+    const t=Math.max(0,Math.min(dur,Number(time)||0));
+    const scrollY=Math.max(0,Math.min(worldH-viewH,t*pxPerSecond()));
+    window.adoaEditorScrollOffset=scrollY;
+    timeline.style.height=viewH+'px';
+    guides.style.height=worldH+'px'; notesLayer.style.height=worldH+'px';
+    guides.style.transform=`translateY(${-scrollY}px)`;
+    notesLayer.style.transform=`translateY(${-scrollY}px)`;
+    if(grid){grid.style.height=worldH+'px';grid.style.transform=`translateY(${-scrollY}px)`;}
+    const seek=$g('seek');if(seek){seek.max=String(dur);if(document.activeElement!==seek)seek.value=String(t);}
+    const now=$g('now');if(now)now.textContent=t.toFixed(3)+'s';
+  };
+  window.buildGuides=function(){
+    if(typeof oldBuildGuides==='function')oldBuildGuides();
+    const timeline=$g('timeline'),guides=$g('guides'),notesLayer=$g('notes');
+    if(!timeline||!guides||!notesLayer)return;
+    let grid=$g('adoaBeatGrid');
+    if(!grid){grid=document.createElement('div');grid.id='adoaBeatGrid';grid.setAttribute('aria-hidden','true');timeline.insertBefore(grid,guides);}
+    // Remove old per-lane gridlines: these were the reason the guides looked vertical/fragmented.
+    guides.querySelectorAll('.time-grid-line,.adoa-beat-guide').forEach(el=>el.remove());
+    const bpm=Math.max(1,Math.min(1000,Number($g('bpm')?.value)||180));
+    const subdivision=Math.max(1,Number($g('subdivision')?.value)||1);
+    const dur=Math.max(1,Number(typeof window.editorViewDuration==='function'?window.editorViewDuration():90)||90);
+    const pps=pxPerSecond(),worldH=Math.max(560,dur*pps),stepSeconds=60/bpm/subdivision;
+    grid.innerHTML='';grid.style.height=worldH+'px';grid.style.width='100%';
+    // A line begins at t=0, then repeats every selected subdivision. Every full beat is emphasized.
+    const count=Math.floor(dur/stepSeconds+1e-7);
+    const fragment=document.createDocumentFragment();
+    for(let i=0;i<=count;i++){
+      const y=i*stepSeconds*pps;if(y>worldH+1)break;
+      const line=document.createElement('div');
+      line.className='adoa-beat-guide'+(i%subdivision===0?' major':'');
+      line.style.top=y+'px';line.dataset.time=(i*stepSeconds).toFixed(6);
+      fragment.appendChild(line);
+    }
+    grid.appendChild(fragment);
+    // Clicking a lane adds a note using the exact inverse of the time-to-pixel formula.
+    guides.querySelectorAll('.guide').forEach(lane=>{
+      lane.onclick=e=>{
+        e.stopPropagation();
+        const rect=timeline.getBoundingClientRect();
+        const scroll=Number(window.adoaEditorScrollOffset)||0;
+        const worldY=Math.max(0,Math.min(worldH,e.clientY-rect.top+scroll));
+        let time=Math.max(0,Math.min(dur,worldY/pps));
+        const snapStep=60/bpm/subdivision;
+        if($g('snap')?.checked)time=Math.round(time/snapStep)*snapStep;
+        time=Number(time.toFixed(6));
+        if(typeof window.pushUndo==='function')window.pushUndo();
+        if(typeof window.addNote==='function')window.addNote({time,lane:Number(lane.dataset.lane)||0,pos:time/dur});
+        if(typeof window.setProjectDirty==='function')window.setProjectDirty();
+      };
+    });
+    const speedInput=$g('gameSpeed'),speedLabel=$g('gameSpeedValue');
+    if(speedInput&&speedLabel)speedLabel.textContent=(Number(speedInput.value)||1).toFixed(1)+'×';
+    const seek=$g('seek'),offset=$g('editorOffsetMs');
+    const offsetTime=Math.max(0,Number(offset?.value)||0)/1000;
+    const requested=firstGridBuild?offsetTime:(Number(seek?.value)||0);
+    firstGridBuild=false;
+    window.updateEditorViewport(Math.min(dur,requested));
+    // Keep the lane layout and note layer width synchronized with the selected key count.
+    const lanes=Math.max(1,Math.min(8,Number($g('keyCount')?.value)||8));
+    guides.style.gridTemplateColumns=`repeat(${lanes},minmax(0,1fr))`;
+    notesLayer.style.setProperty('--lane-count',lanes);
+  };
+  const css=document.createElement('style');
+  css.textContent=`
+    #timeline{position:relative!important;height:560px!important;max-height:560px!important;overflow:hidden!important}
+    #adoaBeatGrid{position:absolute;left:0;right:0;top:0;bottom:auto;pointer-events:none;z-index:2;will-change:transform}
+    #adoaBeatGrid .adoa-beat-guide{position:absolute;left:0;right:0;height:1px;background:#334158;pointer-events:none}
+    #adoaBeatGrid .adoa-beat-guide.major{height:2px;background:#8293b4;box-shadow:0 0 2px #7183a555}
+    #guides{z-index:1!important}
+    #notes{z-index:3!important}
+    #guides .guide{z-index:1!important}
+  `;
+  document.head.appendChild(css);
+  const speedInput=$g('gameSpeed');
+  if(speedInput)speedInput.addEventListener('input',()=>window.buildGuides());
+  ['bpm','subdivision','keyCount'].forEach(id=>$g(id)?.addEventListener('change',()=>window.buildGuides()));
+  $g('editorOffsetMs')?.addEventListener('change',()=>{
+    const input=$g('editorOffsetMs');input.value=String(Math.max(0,Number(input.value)||0));
+    window.updateEditorViewport(Number(input.value)/1000);
+  });
+  // The range is a timeline scrubber. Reposition the viewport without changing note times.
+  $g('seek')?.addEventListener('input',e=>window.updateEditorViewport(Number(e.target.value)||0));
+  window.addEventListener('resize',()=>window.buildGuides());
+  setTimeout(()=>window.buildGuides(),0);
+})();
+
 </script>
 
 </body>
