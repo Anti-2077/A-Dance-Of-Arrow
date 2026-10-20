@@ -184,6 +184,8 @@ function buildGuides(){
 }
 function pushUndo(){undoStack.push(JSON.stringify({notes,events,effects}));if(undoStack.length>50)undoStack.shift()}
 function addNote(n){n.id=Date.now()+Math.random();notes.push(n);selected=n.id;renderNotes()}
+// Expose note creation for the editor's dynamically generated beat-grid click handler.
+window.addNote=addNote; window.renderNotes=renderNotes; window.getEditorNotes=()=>notes;
 function renderNotes(){noteLayer.innerHTML='';const lanes=editorLaneCount();noteLayer.style.display='grid';const viewDuration=editorViewDuration();notes.forEach(n=>{n.pos=positionFromTime(n.time);const el=document.createElement('button');el.className='note'+(n.id===selected?' selected':'');el.style.left=(((Math.max(0,Math.min(lanes-1,n.lane||0))+.5)/lanes)*100)+'%';el.style.top=(n.pos*100)+'%';el.style.zIndex=String(10+Math.round(n.pos*1000));el.textContent='';el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;el.onclick=e=>{e.stopPropagation();selected=n.id;renderNotes();syncSelected()};noteLayer.appendChild(el)});syncSelected();if($('#autosave')?.checked)localStorage.setItem('rf_chart',JSON.stringify({notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}))}
 function currentNote(){return notes.find(n=>n.id===selected)}
 function syncSelected(){const n=currentNote();$('#selectedInfo').textContent=n?`선택됨 · ${(n.time*1000).toFixed(0)}ms · 레인 ${(n.lane||0)+1}`:'노트를 선택하면 세부 정보가 표시됩니다.';if(n){$('#noteTime').value=n.time.toFixed(3);const max=+$('#keyCount').value;$('#noteLane').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i}">${i+1}</option>`).join('');$('#noteLane').value=Math.min(n.lane||0,max-1)}}
@@ -888,25 +890,18 @@ $('#gameSeek').oninput=e=>{
 const adoaInteractionFixStyle = document.createElement('style');
 adoaInteractionFixStyle.textContent = `
 #guides .guide:hover{border-left:1px solid #29364b!important;border-right:1px solid #202a3b!important}
-#editorHoverLine{position:absolute;left:0;right:0;height:2px;top:0;background:#4d9dff;box-shadow:0 0 8px #4d9dff99;z-index:6;pointer-events:none;display:none}
-#timeline.adoa-hovering #editorHoverLine{display:block}
+#editorHoverLine{display:none!important;visibility:hidden!important}
+#timeline.adoa-hovering #editorHoverLine{display:none!important}
 #gameStage:not(:fullscreen) .game-targets{top:68%!important;bottom:auto!important;transform:translateY(-50%)!important}
 #gameStage:not(:fullscreen) .game-target{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 `;
 document.head.appendChild(adoaInteractionFixStyle);
 
 // The hover indicator is a horizontal time guide, not a vertical lane border.
-(function setupHorizontalHoverGuide(){
-  const tl=document.getElementById('timeline');
-  if(!tl)return;
-  let line=document.getElementById('editorHoverLine');
-  if(!line){line=document.createElement('div');line.id='editorHoverLine';tl.appendChild(line);}
-  tl.addEventListener('pointermove',e=>{
-    const r=tl.getBoundingClientRect();
-    line.style.top=Math.max(0,Math.min(r.height-2,e.clientY-r.top))+'px';
-    tl.classList.add('adoa-hovering');
-  });
-  tl.addEventListener('pointerleave',()=>tl.classList.remove('adoa-hovering'));
+(function disableMouseFollowingLine(){
+  const line=document.getElementById('editorHoverLine');
+  if(line) line.remove();
+  document.getElementById('timeline')?.classList.remove('adoa-hovering');
 })();
 
 // 시각 이벤트는 키 입력 판정과 독립적으로 음악 타임라인을 기준으로 실행합니다.
@@ -2187,5 +2182,76 @@ async function refreshCharts(){
   ['bpm','subdivision','keyCount','chartDurationInput','gameSpeed'].forEach(id=>$(id)?.addEventListener('input',()=>{window.buildGuides?.();window.renderNotes?.();}));
   window.addEventListener('resize',()=>{window.buildGuides?.();window.renderNotes?.();});
   requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});
+})();
+</script>
+
+
+<script>
+(function finalNoteVisibilityFix(){
+  const $=id=>document.getElementById(id);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const speed=()=>clamp(Number($('gameSpeed')?.value)||1,.5,10);
+  const duration=()=>Math.max(1,Number($('chartDurationInput')?.value)||((typeof window.editorViewDuration==='function'?window.editorViewDuration():90)));
+  const pxps=()=>80*speed();
+  const height=()=>Math.max(560,duration()*pxps()+Math.max(1,$('timeline')?.clientHeight||560)*.88);
+  const step=()=>60/Math.max(1,Number($('bpm')?.value)||180)/Math.max(1,Number($('subdivision')?.value)||1);
+  // Make generated grid lines hit-testable and keep the visual cursor guide disabled.
+  const css=document.createElement('style');
+  css.textContent=`#editorHoverLine{display:none!important} #editor #adoaBeatGrid{pointer-events:none!important} #editor #adoaBeatGrid .adoa-beat-guide{pointer-events:auto!important;cursor:crosshair!important} #editor #notes{overflow:visible!important} #editor #notes .note{display:block!important;visibility:visible!important;opacity:1!important;position:absolute!important;pointer-events:auto!important;transform:translate(-50%,-50%)!important;min-width:24px!important;min-height:24px!important}`;
+  document.head.appendChild(css);
+  const priorBuild=window.buildGuides;
+  window.buildGuides=function(){
+    if(typeof priorBuild==='function')priorBuild();
+    const tl=$('timeline'),lanes=$('guides'),notes=$('notes'); if(!tl||!lanes||!notes)return;
+    const h=height(),d=duration(),scale=pxps(),beat=step();
+    let grid=$('adoaBeatGrid'); if(!grid){grid=document.createElement('div');grid.id='adoaBeatGrid';tl.insertBefore(grid,lanes);}
+    Object.assign(grid.style,{position:'absolute',inset:'0 0 auto 0',height:h+'px',width:'100%',pointerEvents:'none',zIndex:'4'});
+    grid.innerHTML='';
+    const frag=document.createDocumentFragment(),count=Math.min(12000,Math.floor(d/beat+1e-8));
+    for(let i=0;i<=count;i++){
+      const t=i*beat,line=document.createElement('div');
+      line.className='adoa-beat-guide'+(i%Math.max(1,Number($('subdivision')?.value)||1)===0?' major':'');
+      line.dataset.time=String(t);line.style.top=(h-t*scale)+'px';line.title=`${Math.round(t*1000)} ms · 클릭해 채보 추가`;frag.appendChild(line);
+    }
+    grid.appendChild(frag);notes.style.height=h+'px';notes.style.width='100%';
+    // Existing renderer can recreate notes, then normalize every note to the same grid coordinate.
+    requestAnimationFrame(()=>window.renderNotes?.());
+  };
+  const priorRender=window.renderNotes;
+  window.renderNotes=function(){
+    if(typeof priorRender==='function')priorRender();
+    const layer=$('notes');if(!layer)return;
+    const list=typeof window.getEditorNotes==='function'?window.getEditorNotes():(Array.isArray(window.notes)?window.notes:[]);
+    const h=height(),scale=pxps(),nlanes=clamp(Number($('keyCount')?.value)||8,1,8);
+    layer.style.height=h+'px';layer.style.width='100%';layer.style.display='block';
+    const els=[...layer.querySelectorAll('.note')];
+    els.forEach((el,i)=>{
+      const n=list[i];if(!n)return;
+      const t=Math.max(0,Number(n.time)||0),lane=clamp(Number(n.lane)||0,0,nlanes-1),y=h-t*scale;
+      Object.assign(el.style,{left:((lane+.5)/nlanes*100)+'%',top:y+'px',bottom:'auto',width:`min(34px, calc(100% / ${nlanes} - 4px))`,height:'28px',zIndex:String(100+Math.round(y)),display:'block',visibility:'visible',opacity:'1'});
+    });
+    // Restore the viewport using the same chart-time anchor used by the guide system.
+    window.updateEditorViewport?.(Number($('seek')?.value)||0);
+  };
+  // A capture-phase handler guarantees guide clicks create notes even if lane handlers stop bubbling.
+  const bind=()=>{
+    const grid=$('adoaBeatGrid');if(!grid||grid.dataset.reliableClick==='1')return;
+    grid.dataset.reliableClick='1';
+    grid.addEventListener('click',e=>{
+      const line=e.target.closest?.('.adoa-beat-guide');if(!line)return;
+      e.preventDefault();e.stopPropagation();
+      const tl=$('timeline'),rect=tl.getBoundingClientRect(),count=clamp(Number($('keyCount')?.value)||8,1,8);
+      const worldScroll=Number(window.adoaEditorScrollOffset)||0;
+      const x=clamp(e.clientX-rect.left,0,Math.max(0,rect.width-.01));
+      const lane=clamp(Math.floor(x/Math.max(1,rect.width)*count),0,count-1);
+      const time=clamp(Number(line.dataset.time)||0,0,duration());
+      if(typeof window.addNote!=='function'){console.error('Rhythm Forge: addNote is not available');return;}
+      window.pushUndo?.();window.addNote({time,lane,pos:typeof window.positionFromTime==='function'?window.positionFromTime(time):time/duration(),speed:speed()});
+      window.setProjectDirty?.();window.renderNotes?.();
+    },true);
+  };
+  const b=window.buildGuides;window.buildGuides=function(){b();bind();};
+  window.addEventListener('resize',()=>{window.buildGuides?.();window.renderNotes?.();});
+  requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();bind();});
 })();
 </script>
