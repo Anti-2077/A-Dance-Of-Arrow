@@ -184,7 +184,7 @@ function buildGuides(){
 }
 function pushUndo(){undoStack.push(JSON.stringify({notes,events,effects}));if(undoStack.length>50)undoStack.shift()}
 function addNote(n){n.id=Date.now()+Math.random();notes.push(n);selected=n.id;renderNotes()}
-function renderNotes(){noteLayer.innerHTML='';const lanes=editorLaneCount();noteLayer.style.display='grid';const viewDuration=editorViewDuration();notes.forEach(n=>{n.pos=positionFromTime(n.time);const el=document.createElement('button');el.className='note'+(n.id===selected?' selected':'');el.style.left=(((Math.max(0,Math.min(lanes-1,n.lane||0))+.5)/lanes)*100)+'%';el.style.top=(n.pos*100)+'%';el.textContent='';el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;el.onclick=e=>{e.stopPropagation();selected=n.id;renderNotes();syncSelected()};noteLayer.appendChild(el)});syncSelected();if($('#autosave')?.checked)localStorage.setItem('rf_chart',JSON.stringify({notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}))}
+function renderNotes(){noteLayer.innerHTML='';const lanes=editorLaneCount();noteLayer.style.display='grid';const viewDuration=editorViewDuration();notes.forEach(n=>{n.pos=positionFromTime(n.time);const el=document.createElement('button');el.className='note'+(n.id===selected?' selected':'');el.style.left=(((Math.max(0,Math.min(lanes-1,n.lane||0))+.5)/lanes)*100)+'%';el.style.top=(n.pos*100)+'%';el.style.zIndex=String(10+Math.round(n.pos*1000));el.textContent='';el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;el.onclick=e=>{e.stopPropagation();selected=n.id;renderNotes();syncSelected()};noteLayer.appendChild(el)});syncSelected();if($('#autosave')?.checked)localStorage.setItem('rf_chart',JSON.stringify({notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}))}
 function currentNote(){return notes.find(n=>n.id===selected)}
 function syncSelected(){const n=currentNote();$('#selectedInfo').textContent=n?`선택됨 · ${(n.time*1000).toFixed(0)}ms · 레인 ${(n.lane||0)+1}`:'노트를 선택하면 세부 정보가 표시됩니다.';if(n){$('#noteTime').value=n.time.toFixed(3);const max=+$('#keyCount').value;$('#noteLane').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i}">${i+1}</option>`).join('');$('#noteLane').value=Math.min(n.lane||0,max-1)}}
 function nudge(ms){const n=currentNote();if(!n)return;pushUndo();n.time=Math.max(0,n.time+ms/1000);n.pos=positionFromTime(n.time);renderNotes()}
@@ -1652,7 +1652,7 @@ async function refreshCharts(){
         const worldY=Math.max(0,Math.min(worldH,e.clientY-rect.top+scroll));
         let time=Math.max(0,Math.min(dur,worldY/pps));
         const snapStep=60/bpm/subdivision;
-        if($g('snap')?.checked)time=Math.round(time/snapStep)*snapStep;
+        time=Math.round(time/snapStep)*snapStep;
         time=Number(time.toFixed(6));
         if(typeof window.pushUndo==='function')window.pushUndo();
         if(typeof window.addNote==='function')window.addNote({time,lane:Number(lane.dataset.lane)||0,pos:time/dur});
@@ -1693,6 +1693,71 @@ async function refreshCharts(){
   $g('seek')?.addEventListener('input',e=>window.updateEditorViewport(Number(e.target.value)||0));
   window.addEventListener('resize',()=>window.buildGuides());
   setTimeout(()=>window.buildGuides(),0);
+})();
+
+
+/* UX polish: centered playfield, clearer notes, depth-aware overlaps, and toggleable beat guides. */
+(function adoaPlayfieldAndGuidesPolish(){
+  const $=id=>document.getElementById(id);
+  const style=document.createElement('style');
+  style.textContent=`
+    /* Give the gameplay view generous, balanced outer margins and keep the lanes centered. */
+    .adoa-game-playfield{min-width:0;padding:28px 34px 30px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;background:radial-gradient(ellipse at center,#10182766 0%,transparent 72%);border-radius:14px;}
+    #gameStage{width:min(100%,900px)!important;margin:18px auto 24px!important;height:min(68vh,760px)!important;min-height:420px!important;box-sizing:border-box!important;border:1px solid #34435d!important;box-shadow:0 0 0 1px #070b12,0 18px 48px #0006!important;}
+    #gameStage .game-lanes{left:5%!important;right:5%!important;width:90%!important;}
+    #gameStage .game-targets{left:5%!important;right:5%!important;width:90%!important;}
+    #gameStage .game-note{border:2px solid #657da7!important;outline:1px solid #ffffffcc!important;box-shadow:0 0 0 1px #101827,0 2px 8px #000b,0 0 12px #7e96ff55!important;background:linear-gradient(145deg,#ffffff,#d8e4ff)!important;}
+    #gameStage .game-note[data-overlap="true"]{border-color:#43d9c4!important;}
+    #notes .note{border:2px solid #647ca6!important;outline:1px solid #ffffffd9!important;box-shadow:0 2px 7px #000b,0 0 10px #7e96ff55!important;}
+    #notes .note.selected{border-color:#43d9c4!important;outline:2px solid #43d9c4!important;box-shadow:0 0 0 3px #43d9c455,0 3px 10px #000b!important;}
+    .adoa-guides-toggle{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;padding:7px 10px;font-size:12px;}
+    .adoa-guides-toggle[aria-pressed="false"]{opacity:.75;background:#101722;border-color:#46536a;color:#aab7cb;}
+    #adoaBeatGrid.adoa-guides-hidden{visibility:hidden!important;}
+    #timeline.adoa-guides-hidden .time-grid-line{display:none!important;}
+    .adoa-game-playfield .timeline-foot{width:min(100%,900px);}
+    @media(max-width:850px){.adoa-game-playfield{padding:14px 10px 18px}#gameStage{width:100%!important;margin:12px auto 18px!important;min-height:380px!important}}
+  `;
+  document.head.appendChild(style);
+
+  // Toggle only the horizontal beat/subdivision guides; lane dividers remain visible.
+  const timeline=$('timeline'),foot=timeline?.parentElement?.querySelector('.timeline-foot');
+  let guidesEnabled=true;
+  const applyGuideVisibility=()=>{timeline?.classList.toggle('adoa-guides-hidden',!guidesEnabled);$('adoaBeatGrid')?.classList.toggle('adoa-guides-hidden',!guidesEnabled);timeline?.querySelectorAll('.time-grid-line,.adoa-beat-guide').forEach(el=>el.style.visibility=guidesEnabled?'':'hidden');};
+  const originalBuild=window.buildGuides;
+  if(typeof originalBuild==='function'&&!window.__adoaGuideVisibilityWrapped){window.__adoaGuideVisibilityWrapped=true;window.buildGuides=function(){originalBuild();applyGuideVisibility();};}
+  if(foot&&!$('adoaGuidesToggle')){
+    const btn=document.createElement('button');btn.id='adoaGuidesToggle';btn.type='button';btn.className='adoa-guides-toggle';
+    btn.textContent='▦ 가이드라인 켜짐';btn.setAttribute('aria-pressed','true');
+    const offset=$('editorOffsetMs')?.closest('label');
+    if(offset)foot.insertBefore(btn,offset);else foot.appendChild(btn);
+    btn.addEventListener('click',()=>{
+      guidesEnabled=btn.getAttribute('aria-pressed')!=='true';
+      btn.setAttribute('aria-pressed',String(guidesEnabled));
+      btn.textContent=guidesEnabled?'▦ 가이드라인 켜짐':'▧ 가이드라인 꺼짐';
+      // Hide horizontal guide lines only. Vertical lane boundaries are retained for editing.
+      applyGuideVisibility();
+    });
+  }
+
+  // Maintain z-order on every gameplay frame: the note lower on screen is drawn on top.
+  const originalTick=window.adoTickGame;
+  if(typeof originalTick==='function'&&!window.__adoaDepthTickInstalled){
+    window.__adoaDepthTickInstalled=true;
+    window.adoTickGame=function(){
+      originalTick();
+      const notes=$('gameNotes');if(!notes)return;
+      const els=[...notes.querySelectorAll('.game-note')];
+      els.sort((a,b)=>(parseFloat(a.style.top)||0)-(parseFloat(b.style.top)||0));
+      els.forEach(el=>{el.style.zIndex=String(20+Math.round(parseFloat(el.style.top)||0));});
+      // Mark notes that occupy the same lane and nearly the same vertical position.
+      for(let i=0;i<els.length;i++){
+        let overlap=false;const yi=parseFloat(els[i].style.top)||0,xi=parseFloat(els[i].style.left)||0;
+        for(let j=0;j<els.length;j++){if(i===j)continue;const yj=parseFloat(els[j].style.top)||0,xj=parseFloat(els[j].style.left)||0;if(Math.abs(yi-yj)<2&&Math.abs(xi-xj)<0.2){overlap=true;break;}}
+        els[i].dataset.overlap=String(overlap);
+      }
+    };
+    window.tickGame=window.adoaTickGame;
+  }
 })();
 
 </script>
