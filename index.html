@@ -18,6 +18,12 @@
 .project-modal{width:min(560px,96vw);max-height:85vh;overflow:auto;background:#141b28;border:1px solid #42516e;border-radius:16px;padding:22px;box-shadow:0 18px 70px #0009}
 .project-modal h2{margin:0 0 8px}.project-modal p{color:var(--muted);font-size:13px;line-height:1.5}.project-list{display:flex;flex-direction:column;gap:8px;margin:14px 0}.project-row{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px;background:#0b1018;border:1px solid var(--line);border-radius:9px}.project-row .meta{min-width:0;overflow-wrap:anywhere}.project-modal input{width:100%;margin:8px 0;background:#090e16;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px}.project-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}.project-actions button{flex:1}
 
+
+/* Keep receptor boxes, but remove the horizontal judgment-line stroke. */
+.judge-line{border-top:0!important;box-shadow:none!important;background:transparent!important}
+/* Screen-event controls */
+.event-form .event-ms{width:105px}
+#gameStage .game-lanes,#gameStage #gameTargets,#gameStage #gameNotes{transform-origin:50% 50%;will-change:transform}
 </style>
 
 <style id="adoa-game-receptor-size-fix">
@@ -51,6 +57,7 @@
 }
 </style>
 
+<style>.judge-line,.game-judge-line{display:none!important;box-shadow:none!important}.time-grid-line{display:none!important}</style>
 </head>
 <body>
 <header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">로그인 전</div></header>
@@ -116,7 +123,7 @@
  </div>
  <div class="lower-grid">
   <div class="panel"><h3>판정선 / 키 수 변경 이벤트</h3><p class="muted">특정 시간에 적용할 키 수와 판정선 위치 이벤트를 기록합니다.</p><div class="event-form"><input id="eventTime" type="number" min="0" step=".001" value="0" placeholder="시간(초)"><select id="eventKeys"><option value="4">4키</option><option value="6">6키</option><option value="8">8키</option></select><input id="lineX" type="number" min="0" max="100" value="50" placeholder="판정선 X%"><button id="addEvent">이벤트 추가</button></div><div class="list" id="eventList"></div></div>
-  <div class="panel"><h3>화면 / 이미지 이펙트</h3><p class="muted">이펙트 이벤트와 이미지 레이어를 추가할 수 있습니다. 이 버전에서는 목록과 우선순위를 편집합니다.</p><div class="event-form"><input id="effectTime" type="number" min="0" step=".001" value="0" placeholder="시간(초)"><select id="effectType"><option>화면 흔들림</option><option>확대</option><option>축소</option><option>회전</option><option>좌우 반전</option><option>상하 반전</option></select><button id="addEffect">이펙트 추가</button></div><div class="list" id="effectList"></div><label class="filebutton" style="margin-top:12px">이미지 불러오기<input id="imageFiles" type="file" accept="image/*" multiple></label><div class="list" id="imageList"></div></div>
+  <div class="panel"><h3>화면 / 이미지 이펙트</h3><p class="muted">이벤트 시간은 밀리초 단위로 지정합니다. 노트를 미리 눌러도 효과는 정해진 음악 시간에 발생합니다.</p><div class="event-form"><label>발생 시간(ms) <input id="effectTime" type="number" min="0" step="1" value="0" placeholder="시간(ms)"></label><select id="effectType"><option>화면 흔들림</option><option>확대</option><option>축소</option><option>회전</option><option>좌우 반전</option><option>상하 반전</option></select><label>강도 <input id="effectValue" type="number" step="1" value="15" title="회전은 도, 확대/축소는 퍼센트"></label><label>지속(ms) <input id="effectDuration" type="number" min="1" step="1" value="500" title="효과 지속 시간(ms)"></label><button id="addEffect">이펙트 추가</button></div><div class="list" id="effectList"></div><label class="filebutton" style="margin-top:12px">이미지 불러오기<input id="imageFiles" type="file" accept="image/*" multiple></label><div class="list" id="imageList"></div></div>
  </div>
 </section>
 <section id="settings" class="screen">
@@ -198,8 +205,8 @@ $('#stopAudio').onclick=()=>{if(audio){audio.pause();audio.currentTime=0}editorP
 $('#seek').oninput=e=>{if(audio)audio.currentTime=+e.target.value;else{editorClock=+e.target.value||0;$('#now').textContent=editorClock.toFixed(3)+'s'}};
 $('#addEvent').onclick=()=>{pushUndo();events.push({time:+$('#eventTime').value||0,keys:+$('#eventKeys').value,x:+$('#lineX').value||50});events.sort((a,b)=>a.time-b.time);renderEvents()};
 function renderEvents(){$('#eventList').innerHTML=events.map((e,i)=>`<div class="listitem"><span>${e.time.toFixed(3)}s · ${e.keys}키 · 판정선 X ${e.x}%</span><button data-del-event="${i}">삭제</button></div>`).join('');$$('[data-del-event]').forEach(b=>b.onclick=()=>{pushUndo();events.splice(+b.dataset.delEvent,1);renderEvents()})}
-$('#addEffect').onclick=()=>{pushUndo();effects.push({time:+$('#effectTime').value||0,type:$('#effectType').value});effects.sort((a,b)=>a.time-b.time);renderEffects()};
-function renderEffects(){$('#effectList').innerHTML=effects.map((e,i)=>`<div class="listitem"><span>${e.time.toFixed(3)}s · ${escapeHtml(e.type)}</span><button data-del-effect="${i}">삭제</button></div>`).join('');$$('[data-del-effect]').forEach(b=>b.onclick=()=>{pushUndo();effects.splice(+b.dataset.delEffect,1);renderEffects()})}
+$('#addEffect').onclick=()=>{pushUndo();const ms=Math.max(0,Number($('#effectTime').value)||0);effects.push({time:ms/1000,timeMs:ms,type:$('#effectType').value,value:Number($('#effectValue').value)||15,duration:Math.max(1,Number($('#effectDuration').value)||500),durationMs:Math.max(1,Number($('#effectDuration').value)||500)});effects.sort((a,b)=>a.time-b.time);renderEffects();if(typeof setProjectDirty==='function')setProjectDirty()};
+function renderEffects(){$('#effectList').innerHTML=effects.map((e,i)=>`<div class="listitem"><span>${Number(e.timeMs??((Number(e.time)||0)*1000)).toFixed(0)}ms · ${escapeHtml(e.type)} · ${Number(e.value)||15} · ${Number(e.durationMs??e.duration)||500}ms</span><button data-del-effect="${i}">삭제</button></div>`).join('');$$('[data-del-effect]').forEach(b=>b.onclick=()=>{pushUndo();effects.splice(+b.dataset.delEffect,1);renderEffects();if(typeof setProjectDirty==='function')setProjectDirty()})}
 $('#imageFiles').onchange=e=>{[...e.target.files].forEach(f=>images.push({name:f.name,priority:images.length+1,url:URL.createObjectURL(f)}));renderImages()};
 function renderImages(){$('#imageList').innerHTML=images.map((im,i)=>`<div class="listitem"><span>${escapeHtml(im.name)} · 레이어 ${im.priority}</span><span><button data-up="${i}">↑</button> <button data-down="${i}">↓</button> <button data-remove-image="${i}">×</button></span></div>`).join('');$$('[data-up]').forEach(b=>b.onclick=()=>moveImage(+b.dataset.up,-1));$$('[data-down]').forEach(b=>b.onclick=()=>moveImage(+b.dataset.down,1));$$('[data-remove-image]').forEach(b=>b.onclick=()=>{images.splice(+b.dataset.removeImage,1);images.forEach((x,i)=>x.priority=i+1);renderImages()})}
 function moveImage(i,d){const j=i+d;if(j<0||j>=images.length)return;[images[i],images[j]]=[images[j],images[i]];images.forEach((x,k)=>x.priority=k+1);renderImages()}
@@ -902,11 +909,33 @@ document.head.appendChild(adoaInteractionFixStyle);
   tl.addEventListener('pointerleave',()=>tl.classList.remove('adoa-hovering'));
 })();
 
+// 시각 이벤트는 키 입력 판정과 독립적으로 음악 타임라인을 기준으로 실행합니다.
+function adoApplyTimedVisualEvents(chartTime){
+ const stage=document.getElementById('gameStage'); if(!stage||!gameChart)return;
+ const list=Array.isArray(gameChart.effects)?gameChart.effects:[];
+ let rotate=0,scale=1,flipX=1,flipY=1,shakeX=0,shakeY=0;
+ for(const e of list){
+  const start=Number(e.timeMs!=null?e.timeMs/1000:e.time)||0;
+  const dur=Math.max(.001,Number(e.durationMs!=null?e.durationMs/1000:(e.duration||500)/1000)||.5);
+  if(chartTime<start||chartTime>=start+dur)continue;
+  const progress=(chartTime-start)/dur, v=Number(e.value)||15;
+  if(e.type==='회전')rotate+=v;
+  else if(e.type==='확대')scale=Math.max(scale,1+Math.abs(v)/100);
+  else if(e.type==='축소')scale=Math.min(scale,Math.max(.2,1-Math.abs(v)/100));
+  else if(e.type==='좌우 반전')flipX=-1;
+  else if(e.type==='상하 반전')flipY=-1;
+  else if(e.type==='화면 흔들림'){shakeX=Math.sin(progress*Math.PI*12)*v;shakeY=Math.cos(progress*Math.PI*10)*v*.45;}
+ }
+ stage.style.transform=`translate(${shakeX}px,${shakeY}px) rotate(${rotate}deg) scale(${scale*flipX},${scale*flipY})`;
+ stage.style.transformOrigin='50% 50%';stage.style.transition='transform 40ms linear';
+}
+
 // Notes are drawn above the receptor when their hit time is in the future, then travel
 // downward to the fixed receptor as time advances. Keep this same geometry in and out of fullscreen.
 const adoaStableTickGame = function(){
   if(!gameRunning||!gameChart)return;
   const t=gameElapsed+(performance.now()-gameStartAt)/1000;
+  adoApplyTimedVisualEvents(t+(Number(gameChart.offset??offset)||0)/1000);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(3,Number(document.getElementById('gameSpeed')?.value)||1));
@@ -1421,6 +1450,54 @@ async function refreshCharts(){
  const previousStart= startGame;
  startGame=function(){adoHeldKeys.clear();document.querySelectorAll('#gameTargets .game-target,#editorTargets .editor-target').forEach(x=>x.classList.remove('pressed'));previousStart();};
  document.addEventListener('visibilitychange',()=>{if(document.hidden){adoHeldKeys.clear();adoRefreshHeldKeys();}});
+})();
+</script>
+
+
+<script>
+/* Scheduled chart effects: the chart clock is authoritative. Early hits never advance these events. */
+(function(){
+  const stage=()=>document.getElementById('gameStage');
+  let activeSignature='';
+  function effectTransform(t){
+    const chart=window.gameChart;
+    const effects=Array.isArray(chart?.effects)?chart.effects:[];
+    // Each effect starts at its authored chart time and remains active only for its duration.
+    // duration is stored in milliseconds; older charts without it use a half-second default.
+    let scale=1,rotation=0,flipX=1,flipY=1,shake=0;
+    for(const e of effects){
+      const start=Math.max(0,Number(e.time)||0),duration=Math.max(1,Number(e.duration)||500)/1000;
+      const elapsed=t-start;
+      if(elapsed<0||elapsed>=duration)continue;
+      const progress=elapsed/duration;
+      switch(String(e.type||'')){
+        case '확대': scale=Math.max(scale,1.25); break;
+        case '축소': scale=Math.min(scale,.8); break;
+        case '회전': rotation+=360; break;
+        case '좌우 반전': flipX*=-1; break;
+        case '상하 반전': flipY*=-1; break;
+        case '화면 흔들림': shake=Math.max(shake,Math.sin(progress*Math.PI*10)*(1-progress)*8); break;
+      }
+    }
+    return `translate(${shake}px,0px) rotate(${rotation}deg) scale(${scale*flipX},${scale*flipY})`;
+  }
+  // Apply transforms to the shared playfield layers so notes and receptors move together.
+  const baseTick=window.adoTickGame;
+  if(typeof baseTick==='function'){
+    window.adoTickGame=function(){
+      const rawT=(Number(window.gameElapsed)||0)+(window.gameRunning&&Number.isFinite(window.gameStartAt)?(performance.now()-window.gameStartAt)/1000:0);
+      // Match the note travel clock, including chart offset, so an event lands when its note reaches the receptor.
+      const t=rawT+(Number(window.gameChart?.offset??window.offset)||0)/1000;
+      const transform=effectTransform(t);
+      ['gameLanes','gameTargets','gameNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.transform=transform;});
+      // Editor timeline preview keeps the authored timeline intact; these effects run in its play screen.
+      return baseTick();
+    };
+    // Existing requestAnimationFrame callbacks resolve this mutable function name on each frame.
+    window.tickGame=window.adoTickGame;
+  }
+  // Also clear visual transforms whenever a new chart is selected or a run is stopped/reset.
+  document.getElementById('gameRestart')?.addEventListener('click',()=>{['gameLanes','gameTargets','gameNotes'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.transform='';});});
 })();
 </script>
 
