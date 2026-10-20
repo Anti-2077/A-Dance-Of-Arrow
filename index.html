@@ -2255,3 +2255,147 @@ async function refreshCharts(){
   requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();bind();});
 })();
 </script>
+
+
+<!-- Final diagnostic/fix layer: one authoritative guide grid, click path, and note geometry. -->
+<script>
+(function rhythmForgeFinalEditorReliability(){
+  const $ = id => document.getElementById(id);
+  const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+  const bpm = () => Math.max(1, Number($('bpm')?.value) || 180);
+  const subdivision = () => Math.max(1, Number($('subdivision')?.value) || 4);
+  const laneCount = () => clamp(Number($('keyCount')?.value) || 8, 1, 8);
+  const speed = () => clamp(Number($('gameSpeed')?.value) || 1, .5, 10);
+  const duration = () => Math.max(1, Math.min(600, Number($('chartDurationInput')?.value) || (typeof window.editorViewDuration === 'function' ? window.editorViewDuration() : 90)));
+  const pxPerSecond = () => 80 * speed();
+  const viewportHeight = () => 560;
+  const receptorY = () => viewportHeight() * .88;
+  const worldHeight = () => duration() * pxPerSecond() + receptorY();
+  const timeStep = () => 60 / bpm() / subdivision();
+
+  // Remove all older grid listeners by replacing the grid node, not just its contents.
+  function freshGrid(timeline, laneLayer) {
+    const old = $('adoaBeatGrid');
+    const grid = document.createElement('div');
+    grid.id = 'adoaBeatGrid';
+    grid.setAttribute('aria-label', '박자 가이드라인');
+    grid.style.cssText = 'position:absolute;left:0;right:0;top:0;width:100%;pointer-events:auto;z-index:4;overflow:visible;';
+    if (old?.parentNode) old.parentNode.replaceChild(grid, old);
+    else timeline.insertBefore(grid, laneLayer || timeline.firstChild);
+    return grid;
+  }
+
+  // Ensure the horizontal guide can be hit-tested; only the thin line's hit area catches clicks.
+  const style = document.createElement('style');
+  style.textContent = `
+    #editorHoverLine{display:none!important}
+    #editor #timeline{position:relative!important;height:560px!important;max-height:560px!important;overflow:hidden!important}
+    #editor #adoaBeatGrid{pointer-events:auto!important;z-index:4!important}
+    #editor #adoaBeatGrid .adoa-beat-guide{position:absolute;left:0;right:0;height:8px!important;margin-top:-4px!important;background:transparent!important;pointer-events:auto!important;cursor:crosshair!important;z-index:4!important}
+    #editor #adoaBeatGrid .adoa-beat-guide::before{content:"";position:absolute;left:0;right:0;top:3.5px;height:1px;background:#334158;pointer-events:none}
+    #editor #adoaBeatGrid .adoa-beat-guide.major::before{top:3px;height:2px;background:#8293b4}
+    #editor #adoaBeatGrid .adoa-beat-guide:hover::before{background:#43d9c4;box-shadow:0 0 5px #43d9c4aa}
+    #editor #guides{z-index:1!important;pointer-events:none!important}
+    #editor #notes{z-index:5!important;pointer-events:none!important;overflow:visible!important}
+    #editor #notes .note{position:absolute!important;display:block!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;transform:translate(-50%,-50%)!important;bottom:auto!important;min-width:24px!important;min-height:24px!important;z-index:10!important;border:2px solid #f4f7ff!important;box-shadow:0 1px 5px #000b,0 0 7px #7e96ff66!important}
+  `;
+  document.head.appendChild(style);
+
+  window.adoaWorldHeight = worldHeight;
+  window.updateEditorViewport = function(time){
+    const timeline=$('timeline'), lanes=$('guides'), notesLayer=$('notes'), grid=$('adoaBeatGrid');
+    if(!timeline||!notesLayer)return;
+    const d=duration(), scale=pxPerSecond(), h=worldHeight(), t=clamp(Number(time)||0,0,d);
+    // Time 0 is on the receptor; increasing playhead time makes the chart move down.
+    const scroll=(d-t)*scale;
+    timeline.style.height=viewportHeight()+'px'; timeline.style.maxHeight=viewportHeight()+'px';
+    [lanes,notesLayer,grid].filter(Boolean).forEach(el=>{
+      el.style.height=h+'px'; el.style.transform=`translateY(${-scroll}px)`;
+    });
+    if($('seek')){ $('seek').max=String(d); if(document.activeElement!==$('seek'))$('seek').value=String(t); }
+    if($('now'))$('now').textContent=t.toFixed(3)+'s';
+    window.adoaEditorScrollOffset=scroll;
+  };
+
+  window.buildGuides = function(){
+    const timeline=$('timeline'), lanes=$('guides'), notesLayer=$('notes');
+    if(!timeline||!lanes||!notesLayer)return;
+    const d=duration(), scale=pxPerSecond(), h=worldHeight(), step=timeStep(), sub=subdivision();
+    const grid=freshGrid(timeline,lanes);
+    grid.style.height=h+'px';
+    const total=Math.min(12000,Math.floor(d/step+1e-7));
+    const fragment=document.createDocumentFragment();
+    for(let i=0;i<=total;i++){
+      const t=i*step, line=document.createElement('div');
+      line.className='adoa-beat-guide'+(i%sub===0?' major':'');
+      line.dataset.time=t.toFixed(6);
+      line.style.top=(h-t*scale)+'px';
+      line.title=`${Math.round(t*1000)} ms · 클릭해 채보 추가`;
+      fragment.appendChild(line);
+    }
+    grid.appendChild(fragment);
+    lanes.style.gridTemplateColumns=`repeat(${laneCount()},minmax(0,1fr))`;
+    notesLayer.style.setProperty('--lane-count',String(laneCount()));
+    notesLayer.style.height=h+'px';
+    window.updateEditorViewport(Number($('seek')?.value)||0);
+  };
+
+  // Use one document capture listener so legacy lane/grid handlers cannot swallow or duplicate clicks.
+  if(!window.__rhythmForgeSingleGuideClick){
+    window.__rhythmForgeSingleGuideClick=true;
+    document.addEventListener('click', function(e){
+      const line=e.target?.closest?.('#adoaBeatGrid .adoa-beat-guide');
+      if(!line)return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const timeline=$('timeline'), rect=timeline?.getBoundingClientRect();
+      if(!rect||rect.width<=0)return;
+      const x=clamp(e.clientX-rect.left,0,Math.max(0,rect.width-0.01));
+      const lane=clamp(Math.floor(x/rect.width*laneCount()),0,laneCount()-1);
+      const time=clamp(Number(line.dataset.time)||0,0,duration());
+      if(typeof window.addNote!=='function'){
+        console.error('[Rhythm Forge] addNote 함수가 없어 채보를 생성할 수 없습니다.');
+        if(typeof window.toast==='function')window.toast('채보 생성 기능을 찾을 수 없습니다. 페이지를 새로고침해 주세요.');
+        return;
+      }
+      try{
+        window.pushUndo?.();
+        window.addNote({time,lane,pos:typeof window.positionFromTime==='function'?window.positionFromTime(time):time/duration(),speed:speed()});
+        window.setProjectDirty?.();
+        window.renderNotes?.();
+        // Immediate visual confirmation and a clear console trace for troubleshooting.
+        requestAnimationFrame(()=>{
+          const list=typeof window.getEditorNotes==='function'?window.getEditorNotes():[];
+          const note=list[list.length-1];
+          if(note && typeof window.renderNotes==='function')window.renderNotes();
+          console.debug('[Rhythm Forge] 채보 생성됨', {time:+time.toFixed(4),lane,count:list.length});
+        });
+      }catch(err){
+        console.error('[Rhythm Forge] 채보 생성 실패:',err);
+        if(typeof window.toast==='function')window.toast('채보 생성 중 오류가 발생했습니다. 개발자 콘솔을 확인해 주세요.');
+      }
+    }, true);
+  }
+
+  // Render with the exact same world coordinate as the matching guide.
+  const previousRender=window.renderNotes;
+  window.renderNotes=function(){
+    if(typeof previousRender==='function')previousRender();
+    const layer=$('notes'); if(!layer)return;
+    const list=typeof window.getEditorNotes==='function'?window.getEditorNotes():[];
+    const h=worldHeight(), scale=pxPerSecond(), count=laneCount();
+    layer.style.height=h+'px'; layer.style.width='100%'; layer.style.display='block';
+    const els=Array.from(layer.querySelectorAll('.note'));
+    els.forEach((el,i)=>{
+      const n=list[i]; if(!n)return;
+      const t=clamp(Number(n.time)||0,0,duration()), lane=clamp(Number(n.lane)||0,0,count-1);
+      const y=h-t*scale;
+      Object.assign(el.style,{left:((lane+.5)/count*100)+'%',top:y+'px',bottom:'auto',width:`min(34px, calc(100% / ${count} - 4px))`,height:'28px',zIndex:String(100+Math.round(y)),display:'block',visibility:'visible',opacity:'1'});
+    });
+    window.updateEditorViewport(Number($('seek')?.value)||0);
+  };
+
+  ['bpm','subdivision','keyCount','chartDurationInput','gameSpeed'].forEach(id=>$(id)?.addEventListener('change',()=>{window.buildGuides();window.renderNotes();}));
+  window.addEventListener('resize',()=>{window.buildGuides();window.renderNotes();});
+  requestAnimationFrame(()=>{window.buildGuides();window.renderNotes();});
+})();
+</script>
