@@ -1870,5 +1870,213 @@ async function refreshCharts(){
 
 </script>
 
+
+<script>
+/* Final coherence pass: aligned gameplay geometry, complete editor-setting persistence,
+   and one consistent time-to-pixel guide/seek model. */
+(function adoaFinalCoherencePass(){
+  const $=id=>document.getElementById(id);
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const speed=()=>clamp(Number($('gameSpeed')?.value)||1,.5,10);
+  const bpm=()=>Math.max(1,Number($('bpm')?.value)||180);
+  const subdivision=()=>Math.max(1,Number($('subdivision')?.value)||4);
+  const duration=()=>Math.max(1,Number($('chartDurationInput')?.value)||(typeof editorViewDuration==='function'?editorViewDuration():90)||90);
+  const pxPerSec=()=>80*speed();
+  const judgeY=()=>Math.max(1,($('timeline')?.clientHeight||560)*.88);
+  const worldHeight=()=>duration()*pxPerSec()+judgeY();
+  const settingsKey='adoa_editor_settings_v2';
+  const excluded=new Set(['noteTime','noteLane','seek','audioFile','imageFiles','gameSeek','nickname']);
+
+  function collectSettings(){
+    const out={};
+    document.querySelectorAll('#editor input[id],#editor select[id],#editor textarea[id],#settings input[id],#settings select[id],#settings textarea[id]').forEach(el=>{
+      if(excluded.has(el.id)||el.type==='file'||el.type==='button'||el.type==='submit'||el.id==='adoaInvincibleToggle')return;
+      if(el.type==='checkbox'||el.type==='radio')out[el.id]={type:el.type,checked:!!el.checked};
+      else out[el.id]={type:el.type||el.tagName.toLowerCase(),value:el.value};
+    });
+    // These controls are created dynamically and are still part of the editor configuration.
+    ['gameSpeed','chartDurationInput','editorOffsetMs','effectTime','effectType','effectValue','effectDuration'].forEach(id=>{
+      const el=$(id);if(el&&!excluded.has(id)&&el.type!=='file')out[id]={type:el.type||el.tagName.toLowerCase(),value:el.value};
+    });
+    return out;
+  }
+  function applySettings(settings){
+    if(!settings||typeof settings!=='object')return;
+    Object.entries(settings).forEach(([id,data])=>{
+      if(id==='adoaInvincibleToggle'||excluded.has(id))return;
+      const el=$(id);if(!el||!data||typeof data!=='object')return;
+      if(data.type==='checkbox'||data.type==='radio')el.checked=!!data.checked;
+      else if(data.value!==undefined)el.value=String(data.value);
+      if(id==='gameSpeed'&&$('gameSpeedValue'))$('gameSpeedValue').textContent=speed().toFixed(1)+'×';
+      if(id==='musicVol'&&$('musicVal'))$('musicVal').textContent=el.value+'%';
+      if(id==='sfxVol'&&$('sfxVal'))$('sfxVal').textContent=el.value+'%';
+      if(id==='keyVol'&&$('keyVal'))$('keyVal').textContent=el.value+'%';
+    });
+    if(typeof updateOffset==='function')updateOffset();
+  }
+  function persistSettings(){
+    try{localStorage.setItem(settingsKey,JSON.stringify(collectSettings()));}catch(e){/* quota/security restrictions are non-fatal */}
+  }
+  try{const saved=JSON.parse(localStorage.getItem(settingsKey)||'null');if(saved)applySettings(saved);}catch{}
+
+  // Include all non-invincibility editor settings in every project/chart snapshot.
+  const snapshotBefore=window.chartSnapshot;
+  if(typeof snapshotBefore==='function'&&!window.__adoaSettingsSnapshotWrapped){
+    window.__adoaSettingsSnapshotWrapped=true;
+    window.chartSnapshot=function(){const chart=snapshotBefore();chart.editorSettings=collectSettings();chart.speed=speed();chart.duration=duration();return chart;};
+  }
+  const restoreBefore=window.restoreSnapshot;
+  if(typeof restoreBefore==='function'&&!window.__adoaSettingsRestoreWrapped){
+    window.__adoaSettingsRestoreWrapped=true;
+    window.restoreSnapshot=function(raw){
+      let data=raw;try{if(typeof raw==='string')data=JSON.parse(raw);}catch{}
+      restoreBefore(raw);
+      if(data&&data.editorSettings)applySettings(data.editorSettings);
+      if(data&&Number.isFinite(Number(data.speed))&&$('gameSpeed'))$('gameSpeed').value=String(clamp(Number(data.speed),.5,10));
+      if(data&&Number.isFinite(Number(data.duration))&&$('chartDurationInput'))$('chartDurationInput').value=String(clamp(Number(data.duration),1,600));
+      persistSettings();requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});
+    };
+  }
+  const loadBefore=window.loadChartIntoEditor;
+  if(typeof loadBefore==='function'&&!window.__adoaSettingsLoadWrapped){
+    window.__adoaSettingsLoadWrapped=true;
+    window.loadChartIntoEditor=function(data){loadBefore(data);if(data?.editorSettings)applySettings(data.editorSettings);if(data?.speed&&$('gameSpeed'))$('gameSpeed').value=String(clamp(Number(data.speed),.5,10));if(data?.duration&&$('chartDurationInput'))$('chartDurationInput').value=String(clamp(Number(data.duration),1,600));persistSettings();requestAnimationFrame(()=>{window.buildGuides?.();window.renderNotes?.();});};
+  }
+
+  // Persist changes as soon as any non-file editor/setting control changes. Invincibility is never captured.
+  document.addEventListener('change',e=>{
+    const el=e.target;if(!el?.matches?.('#editor input,#editor select,#editor textarea,#settings input,#settings select,#settings textarea'))return;
+    if(excluded.has(el.id)||el.type==='file'||el.id==='adoaInvincibleToggle')return;
+    persistSettings();
+    if(typeof window.setProjectDirty==='function')window.setProjectDirty();
+    if($('autosave')?.checked&&typeof window.chartSnapshot==='function'){
+      try{localStorage.setItem('rf_chart',JSON.stringify(window.chartSnapshot()));}catch{}
+    }
+    if(['bpm','subdivision','keyCount','gameSpeed','chartDurationInput','editorOffsetMs'].includes(el.id)){
+      window.buildGuides?.();window.renderNotes?.();
+    }
+  });
+  document.addEventListener('input',e=>{
+    const el=e.target;if(!el?.matches?.('#editor input,#editor select,#editor textarea,#settings input,#settings select,#settings textarea'))return;
+    if(excluded.has(el.id)||el.type==='file'||el.id==='adoaInvincibleToggle')return;
+    persistSettings();
+    if(el.id==='gameSpeed'&&$('gameSpeedValue'))$('gameSpeedValue').textContent=speed().toFixed(1)+'×';
+    if(['bpm','subdivision','gameSpeed','chartDurationInput'].includes(el.id))window.buildGuides?.();
+  });
+
+  // Unified editor geometry: 0 seconds is on the judgment line; later chart times are above it.
+  window.adoaWorldHeight=worldHeight;
+  window.updateEditorViewport=function(time){
+    const timeline=$('timeline'),lanes=$('guides'),notesLayer=$('notes'),grid=$('adoaBeatGrid');
+    if(!timeline||!lanes||!notesLayer)return;
+    const dur=duration(),scale=pxPerSec(),wh=worldHeight(),t=clamp(Number(time)||0,0,dur),scroll=(dur-t)*scale;
+    window.adoaEditorScrollOffset=scroll;
+    timeline.style.height='560px';timeline.style.maxHeight='560px';
+    [lanes,notesLayer].forEach(layer=>{layer.style.height=wh+'px';layer.style.transform=`translateY(${-scroll}px)`;});
+    if(grid){grid.style.height=wh+'px';grid.style.transform=`translateY(${-scroll}px)`;}
+    const seek=$('seek');if(seek){seek.max=String(dur);if(document.activeElement!==seek)seek.value=String(t);}
+    if($('now'))$('now').textContent=t.toFixed(3)+'s';
+  };
+  const oldRender=window.renderNotes;
+  if(typeof oldRender==='function'&&!window.__adoaRenderGeometryWrapped){
+    window.__adoaRenderGeometryWrapped=true;
+    window.renderNotes=function(){
+      oldRender();const layer=$('notes');if(!layer)return;
+      const wh=worldHeight(),scale=pxPerSec();layer.style.height=wh+'px';
+      const els=[...layer.querySelectorAll('.note')];
+      els.forEach((el,index)=>{
+        const noteTime=Number(Array.isArray(notes)?notes[index]?.time:NaN);
+        const t=Number.isFinite(noteTime)?noteTime:0;
+        el.style.top=(wh-t*scale)+'px';el.style.bottom='auto';
+      });
+      if(typeof window.updateEditorViewport==='function')window.updateEditorViewport(Number($('seek')?.value)||0);
+    };
+  }
+
+  // Rebuild the original-style clickable horizontal grid with one shared timing formula.
+  const oldBuild=window.buildGuides;
+  if(typeof oldBuild==='function'&&!window.__adoaFinalGuidesWrapped){
+    window.__adoaFinalGuidesWrapped=true;
+    window.buildGuides=function(){
+      oldBuild();const timeline=$('timeline'),laneLayer=$('guides'),noteLayer=$('notes');if(!timeline||!laneLayer||!noteLayer)return;
+      let grid=$('adoaBeatGrid');if(!grid){grid=document.createElement('div');grid.id='adoaBeatGrid';grid.setAttribute('aria-label','박자 가이드라인');timeline.insertBefore(grid,laneLayer);}
+      const dur=duration(),scale=pxPerSec(),wh=worldHeight(),step=60/bpm()/subdivision(),count=Math.floor(dur/step+1e-7);
+      grid.innerHTML='';Object.assign(grid.style,{position:'absolute',left:'0',right:'0',top:'0',width:'100%',height:wh+'px',pointerEvents:'none',zIndex:'2'});
+      const frag=document.createDocumentFragment();
+      for(let i=0;i<=count;i++){
+        const t=i*step,line=document.createElement('div');line.className='adoa-beat-guide'+(i%subdivision()===0?' major':'');
+        line.dataset.time=t.toFixed(6);line.style.top=(wh-t*scale)+'px';line.style.height='6px';line.style.marginTop='-3px';line.style.pointerEvents='auto';line.style.cursor='crosshair';
+        line.title=`${(t*1000).toFixed(0)} ms · 클릭해 채보 추가`;
+        line.addEventListener('click',e=>{
+          e.preventDefault();e.stopPropagation();
+          const rect=timeline.getBoundingClientRect(),laneCount=clamp(Number($('keyCount')?.value)||8,1,8),x=clamp(e.clientX-rect.left,0,Math.max(0,rect.width-1));
+          const lane=clamp(Math.floor(x/Math.max(1,rect.width)*laneCount),0,laneCount-1),time=Number(line.dataset.time)||0;
+          if($('snap')?.checked){} // guide clicks are already exactly snapped to this grid time
+          if(typeof window.pushUndo==='function')window.pushUndo();
+          if(typeof window.addNote==='function')window.addNote({time,lane,pos:typeof window.positionFromTime==='function'?window.positionFromTime(time):time/dur,speed:speed()});
+          if(typeof window.setProjectDirty==='function')window.setProjectDirty();
+          window.renderNotes?.();
+        });frag.appendChild(line);
+      }
+      grid.appendChild(frag);
+      laneLayer.style.gridTemplateColumns=`repeat(${clamp(Number($('keyCount')?.value)||8,1,8)},minmax(0,1fr))`;
+      noteLayer.style.setProperty('--lane-count',String(clamp(Number($('keyCount')?.value)||8,1,8)));
+      // 0 s line is at the receptor when the playhead is at 0. Moving seek right moves the chart downward.
+      const seek=$('seek'),offset=Math.max(0,Number($('editorOffsetMs')?.value)||0)/1000;
+      const current=Number(seek?.value)||offset;window.updateEditorViewport(clamp(current,0,dur));
+    };
+  }
+  // A single seek handler avoids competing old handlers and guarantees downward motion when seeking right.
+  if($('seek'))$('seek').oninput=e=>{
+    const t=clamp(Number(e.target.value)||0,0,duration());
+    if(typeof audio!=='undefined'&&audio){try{audio.currentTime=Math.min(t,Number.isFinite(audio.duration)?audio.duration:t);}catch{}}
+    else if(typeof editorClock!=='undefined'){editorClock=t;editorClockStart=performance.now();}
+    window.updateEditorViewport(t);
+  };
+
+  // Keep playfield, receptors, notes, and judgment line on the same centered lane span.
+  const css=document.createElement('style');css.textContent=`
+    #editor #timeline{position:relative!important;overflow:hidden!important;height:560px!important;max-height:560px!important}
+    #editor #adoaBeatGrid{z-index:2!important;overflow:visible!important}
+    #editor #adoaBeatGrid .adoa-beat-guide{position:absolute;left:0;right:0;background:#334158;z-index:2;pointer-events:auto}
+    #editor #adoaBeatGrid .adoa-beat-guide.major{background:#8293b4;box-shadow:0 0 2px #7183a555}
+    #editor #adoaBeatGrid .adoa-beat-guide:hover{background:#43d9c4;box-shadow:0 0 6px #43d9c4aa}
+    #editor #guides{z-index:1!important}#editor #notes{z-index:3!important}
+    #editor #notes .note{z-index:10!important}
+    #gameStage{width:min(100%,900px)!important;margin:18px auto 24px!important;box-sizing:border-box!important;position:relative!important;overflow:hidden!important}
+    #gameStage .game-lanes{left:5%!important;right:5%!important;width:90%!important;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
+    #gameStage .game-targets{left:5%!important;right:5%!important;width:90%!important;top:68%!important;bottom:auto!important;transform:translateY(-50%)!important;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
+    #gameStage .game-target{width:calc(100% - 4px)!important;height:auto!important;aspect-ratio:1!important;justify-self:center!important;box-sizing:border-box!important}
+    #gameStage .game-notes{inset:0!important;width:100%!important}
+    #gameStage .game-note{width:calc(90% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1!important;box-sizing:border-box!important;border:2px solid #fff!important;outline:1px solid #101827!important}
+    #gameStage .game-judge-line{left:5%!important;right:5%!important;width:90%!important;top:68%!important;height:3px!important;z-index:3!important}
+    @media(max-width:850px){#gameStage{width:100%!important;margin:12px auto 18px!important}}
+  `;document.head.appendChild(css);
+
+  const oldTick=window.adoTickGame;
+  if(typeof oldTick==='function'&&!window.__adoaFinalGameGeometryWrapped){
+    window.__adoaFinalGameGeometryWrapped=true;
+    window.adoTickGame=function(){
+      oldTick();const layer=$('gameNotes'),chart=window.gameChart;if(!layer||!chart)return;
+      const count=clamp(Number(chart.keyCount)||8,1,8),els=[...layer.querySelectorAll('.game-note')];
+      els.forEach(el=>{
+        const idx=Number(el.dataset.noteIndex),n=Array.isArray(chart.notes)?chart.notes[idx]:null;if(!n)return;
+        const lane=clamp(Number(n.lane)||0,0,count-1);
+        el.style.left=`${5+((lane+.5)/count)*90}%`;
+        el.style.width=`calc(${90/count}% - 4px)`;el.style.height='auto';el.style.aspectRatio='1';
+      });
+      els.sort((a,b)=>(parseFloat(a.style.top)||0)-(parseFloat(b.style.top)||0));
+      els.forEach((el,i)=>el.style.zIndex=String(20+i));
+    };
+    window.tickGame=window.adoTickGame;
+  }
+
+  // Make the guide grid responsive to setting changes and persist the latest values immediately.
+  ['bpm','subdivision','keyCount','chartDurationInput','gameSpeed','editorOffsetMs'].forEach(id=>$(id)?.addEventListener('input',()=>{window.buildGuides?.();window.renderNotes?.();}));
+  window.addEventListener('resize',()=>window.buildGuides?.());
+  requestAnimationFrame(()=>{persistSettings();window.buildGuides?.();window.renderNotes?.();});
+})();
+</script>
+
 </body>
 </html>
