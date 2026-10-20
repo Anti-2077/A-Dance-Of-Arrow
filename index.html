@@ -1178,24 +1178,37 @@ function adoTickGame(){
 tickGame=adoTickGame;
 
 // Replace the earlier input listener (removed below) with one capture-phase handler.
+const adoHeldKeys = new Set();
+function adoRefreshHeldKeys(){
+  if(!gameChart)return;
+  const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8)),mapping=keys[count]||keys[8]||[];
+  const heldLanes=new Set();
+  for(const key of adoHeldKeys){const lane=mapping.findIndex(k=>String(k).toUpperCase()===String(key).toUpperCase());if(lane>=0)heldLanes.add(lane);}
+  document.querySelectorAll('#gameTargets .game-target').forEach((el,i)=>el.classList.toggle('pressed',heldLanes.has(i)));
+  document.querySelectorAll('.adoa-input-lane').forEach(el=>el.classList.toggle('active',heldLanes.has(Number(el.dataset.inputLane))));
+  // The editor's own receptor row receives the same held-key feedback during editor preview.
+  document.querySelectorAll('#editorTargets .editor-target').forEach((el,i)=>el.classList.toggle('pressed',heldLanes.has(i)));
+}
 function adoGameKeyHandler(e){
   if(!gameRunning||!gameChart||document.getElementById('game')?.classList.contains('active')!==true)return;
-  if(e.repeat||/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||''))return;
+  if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement?.tagName||''))return;
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8)),mapping=keys[count]||keys[8]||[];
   const lane=mapping.findIndex(k=>String(k).toUpperCase()===e.key.toUpperCase());if(lane<0)return;
   e.preventDefault();e.stopImmediatePropagation();
-  const meter=document.getElementById('adoaInputMeter');meter?.querySelectorAll('.adoa-input-lane').forEach(el=>el.classList.toggle('active',Number(el.dataset.inputLane)===lane));
+  if(e.repeat || adoHeldKeys.has(e.key))return;
+  adoHeldKeys.add(e.key);adoRefreshHeldKeys();
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[],t=gameElapsed+(performance.now()-gameStartAt)/1000+(Number(gameChart.offset??offset)||0)/1000;
   let best=-1,bestError=Infinity;
   for(let i=0;i<list.length;i++){if(gameHit.has(i)||gameMissed.has(i)||Number(list[i].lane)!==lane)continue;const err=(t-(Number(list[i].time)||0))*1000;if(Math.abs(err)<=100&&Math.abs(err)<Math.abs(bestError)){best=i;bestError=err;}}
-  if(best<0)return; // Outside ±100ms or no note in this lane: input is ignored.
+  if(best<0)return;
   const abs=Math.abs(bestError);let kind;
   if(abs<=25)kind='perfect';else if(abs<=50)kind='good';else if(abs<=75)kind='notbad';else kind='bad';
   gameHit.add(best);gameScore+=kind==='perfect'?300:kind==='good'?200:kind==='notbad'?100:25;
   adoRecordHit(kind);const el=adoGameNoteEls[best];if(el)el.style.display='none';
 }
 document.addEventListener('keydown',adoGameKeyHandler,true);
-document.addEventListener('keyup',e=>{const lane=document.querySelector(`.adoa-input-lane[data-input-lane]`);if(lane)document.querySelectorAll('.adoa-input-lane').forEach(el=>el.classList.remove('active'));},true);
+document.addEventListener('keyup',e=>{adoHeldKeys.delete(e.key);adoRefreshHeldKeys();},true);
+window.addEventListener('blur',()=>{adoHeldKeys.clear();adoRefreshHeldKeys();});
 
 // Seeking resets the run's judgement state but never changes the fixed receptor line.
 const adoSeek=document.getElementById('gameSeek');if(adoSeek){adoSeek.oninput=e=>{const t=Math.max(0,Number(e.target.value)||0);gameElapsed=t;gameStartAt=performance.now();gameHit=new Set();gameMissed=new Set();gameScore=0;gameMiss=0;adoResetHUD();adoPrepareGameNotes();if(gameAudio){try{gameAudio.currentTime=t;if(gameRunning)gameAudio.play().catch(()=>{});}catch{}}if(gameRunning){cancelAnimationFrame(gameRAF);gameRAF=requestAnimationFrame(adoTickGame);}else if(gameChart){gameRunning=true;document.getElementById('gameOverlay')?.classList.add('hidden');gameRAF=requestAnimationFrame(adoTickGame);}};}
@@ -1389,6 +1402,25 @@ async function refreshCharts(){
   const oldStart=startGame;
   startGame=function(){document.querySelectorAll('#gameTargets .game-target').forEach(x=>x.classList.remove('pressed'));oldStart();updateAccuracy();};
   updateAccuracy();
+})();
+</script>
+
+
+<style id="adoa-multikey-combo-fix">
+/* Keep every simultaneously held receptor dark, and share the same feedback in editor preview. */
+#gameTargets .game-target.pressed,#editorTargets .editor-target.pressed{background:#101923!important;border-color:#253345!important;box-shadow:inset 0 0 12px #000b,0 0 3px #000!important;filter:brightness(.52)!important}
+#editorTargets .editor-target{transition:background .07s ease,filter .07s ease,box-shadow .07s ease}
+.adoa-combo{opacity:0;visibility:hidden}
+.adoa-combo.active{visibility:visible;animation:adoaComboOneSecond 1s ease-out forwards}
+.adoa-combo.pulse{animation:adoaComboOneSecond 1s ease-out forwards}
+@keyframes adoaComboOneSecond{0%{opacity:0;transform:translate(-50%,-50%) scale(.78)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.13)}28%{opacity:1;transform:translate(-50%,-50%) scale(1)}88%{opacity:1;transform:translate(-50%,-52%) scale(1)}100%{opacity:0;visibility:hidden;transform:translate(-50%,-56%) scale(.98)}}
+</style>
+<script>
+// Reapply the shared receptor/combo behavior when a chart or editor preview starts.
+(function(){
+ const previousStart= startGame;
+ startGame=function(){adoHeldKeys.clear();document.querySelectorAll('#gameTargets .game-target,#editorTargets .editor-target').forEach(x=>x.classList.remove('pressed'));previousStart();};
+ document.addEventListener('visibilitychange',()=>{if(document.hidden){adoHeldKeys.clear();adoRefreshHeldKeys();}});
 })();
 </script>
 
