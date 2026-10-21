@@ -2151,12 +2151,13 @@ async function refreshCharts(){
  // that older startup handlers may accidentally reset to zero.
  const saved=getSaved();
  if(saved!==null){if(input)input.value=String(saved);store(saved)}
- if(input){
-   input.addEventListener('input',saveEditor,true);
-   input.addEventListener('change',saveEditor,true);
-   input.addEventListener('blur',saveEditor);
-   input.addEventListener('keydown',e=>{if(e.key==='Enter')saveEditor()});
- }
+ // IMPORTANT: older v8 code calls stopImmediatePropagation() on the input
+ // element itself. A listener attached to that same element can therefore be
+ // skipped. Listen at DOCUMENT capture phase, before the event reaches the input.
+ document.addEventListener('input',e=>{if(e.target===input)saveEditor()},true);
+ document.addEventListener('change',e=>{if(e.target===input)saveEditor()},true);
+ document.addEventListener('focusout',e=>{if(e.target===input)saveEditor()},true);
+ document.addEventListener('keydown',e=>{if(e.target===input&&e.key==='Enter')saveEditor()},true);
  // The settings-page +/-/reset buttons change the global offset. Sync that value
  // back into the editor field after their existing click handlers have completed.
  document.addEventListener('click',e=>{
