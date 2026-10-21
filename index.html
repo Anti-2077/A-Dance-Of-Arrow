@@ -58,6 +58,13 @@
 </style>
 
 <style>.judge-line,.game-judge-line{display:none!important;box-shadow:none!important}.time-grid-line{display:none!important}</style>
+
+<style id="keys-only-settings-ui">
+/* 설정 화면에는 키 매핑만 표시합니다. 기존 요소는 숨겨 두어 관련 스크립트가 오류 없이 유지되게 합니다. */
+#settings .settings-grid{grid-template-columns:minmax(0,760px);justify-content:center}
+#settings .settings-grid > .panel:not(:first-child){display:none!important}
+#settings .settings-grid > .panel:first-child{width:100%}
+</style>
 </head>
 <body>
 <header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">로그인 전</div></header>
@@ -71,7 +78,7 @@
   <button class="menu-card" data-screen="game"><div class="bigicon">▶</div><h3>게임 플레이</h3><p>개발자 메뉴에 저장된 채보를 선택해 8레인 리듬게임을 플레이합니다.</p></button>
   <button class="menu-card" data-screen="editor"><div class="bigicon">♫</div><h3>에디터</h3><p>8개 레인에 위에서 아래로 떨어지는 정사각형 노트를 배치하세요.</p></button>
   <button class="menu-card" data-screen="autochart"><div class="bigicon">✦</div><h3>자동 채보 생성</h3><p>음악 파일과 BPM, 박자를 바탕으로 자동 채보를 만듭니다.</p></button>
-  <button class="menu-card" data-screen="settings"><div class="bigicon">⚙</div><h3>설정</h3><p>4/6/8키 매핑, 오프셋, 음악과 효과음 볼륨을 설정합니다.</p></button>
+  <button class="menu-card" data-screen="settings"><div class="bigicon">⚙</div><h3>설정</h3><p>4키, 6키, 8키의 키 설정을 변경합니다.</p></button>
   <button class="menu-card" data-screen="community"><div class="bigicon">☁</div><h3>공개 채보</h3><p>개발자 채보를 저장하거나 공개 서버에서 채보를 찾아봅니다.</p></button>
  </div>
  <p class="help">참고: 이 단일 HTML 버전은 브라우저 프로토타입입니다. 로그인은 데모이며, 서버 계정이나 클라우드 저장은 연결되어 있지 않습니다.</p>
@@ -700,11 +707,11 @@ adoaViewStyle.textContent = `
 #gameStage:fullscreen{width:100vw!important;height:100vh!important;min-height:100vh!important;max-height:100vh!important;border:0!important;border-radius:0!important;background:#05080e}
 #gameStage:fullscreen .game-lane{border:0!important;background:none!important}
 #gameStage:fullscreen .game-lane-label{display:none!important}
-#gameStage:fullscreen .game-targets{top:71%!important;bottom:auto!important;transform:translateY(-50%)!important}
+#gameStage:fullscreen .game-targets{top:68%!important;bottom:auto!important;transform:translateY(-50%)!important}
 #gameStage:fullscreen .game-target{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 #gameStage:fullscreen .game-note{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 #gameStage:fullscreen .game-overlay{font-size:clamp(18px,3vw,32px)}
-.game-judge-line{position:absolute;left:0;right:0;top:71%;height:2px;background:var(--accent2);box-shadow:0 0 12px #43d9c488;z-index:2;pointer-events:none}
+.game-judge-line{position:absolute;left:0;right:0;top:68%;height:2px;background:var(--accent2);box-shadow:0 0 12px #43d9c488;z-index:2;pointer-events:none}
 .game-speed-control{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
 .game-speed-control input{width:120px}
 #editorPlaySpeed{width:110px}
@@ -844,7 +851,7 @@ tickGame=function(){
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1));
   const approach=2.2/speed;
-  const judgeY=.71;
+  const judgeY=.68;
   const stage=document.getElementById('gameStage');
   const height=stage?stage.clientHeight:600;
   $('#gameClock').textContent=t.toFixed(3)+'s';
@@ -893,7 +900,7 @@ adoaInteractionFixStyle.textContent = `
 #guides .guide:hover{border-left:1px solid #29364b!important;border-right:1px solid #202a3b!important}
 #editorHoverLine{display:none!important;visibility:hidden!important}
 #timeline.adoa-hovering #editorHoverLine{display:none!important}
-#gameStage:not(:fullscreen) .game-targets{top:71%!important;bottom:auto!important;transform:translateY(-50%)!important}
+#gameStage:not(:fullscreen) .game-targets{top:68%!important;bottom:auto!important;transform:translateY(-50%)!important}
 #gameStage:not(:fullscreen) .game-target{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 `;
 document.head.appendChild(adoaInteractionFixStyle);
@@ -931,12 +938,12 @@ function adoApplyTimedVisualEvents(chartTime){
 const adoaStableTickGame = function(){
   if(!gameRunning||!gameChart)return;
   const t=gameElapsed+(performance.now()-gameStartAt)/1000;
-  adoApplyTimedVisualEvents(t-((Number(offset)||0)+(Number(gameChart.editorOffsetMs??gameChart.offset)||0))/1000);
+  adoApplyTimedVisualEvents(t-(Number(gameChart.offset??offset)||0)/1000);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
   const approach=2.2/speed;
-  const judgeY=.71;
+  const judgeY=.68;
   const stage=document.getElementById('gameStage');
   const height=stage?stage.clientHeight:600;
   $('#gameClock').textContent=t.toFixed(3)+'s';
@@ -997,10 +1004,10 @@ adoStyle.textContent = `
 #gameStage .game-lanes{inset:0;right:0;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
 #gameStage .game-lane{border-left:1px solid #253044;background:linear-gradient(180deg,#141c2b66,#080c13 72%)}
 #gameStage .game-lane-label{display:none}
-#gameStage .game-targets{left:0!important;right:0!important;top:71%!important;bottom:auto!important;transform:translateY(-50%)!important;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
+#gameStage .game-targets{left:0!important;right:0!important;top:68%!important;bottom:auto!important;transform:translateY(-50%)!important;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
 #gameStage .game-target{width:calc(100% - 4px)!important;height:auto!important;aspect-ratio:1!important;max-width:none!important;border:2px solid #43d9c4;background:#43d9c422;box-shadow:0 0 16px #43d9c455}
 #gameStage .game-note{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1!important;border-radius:3px!important;transform:translate(-50%,-50%)!important}
-#gameStage .game-judge-line{display:block!important;position:absolute!important;left:0!important;right:0!important;top:71%!important;bottom:auto!important;height:3px!important;background:#43d9c4!important;box-shadow:0 0 16px #43d9c4aa!important;z-index:3!important;pointer-events:none}
+#gameStage .game-judge-line{display:block!important;position:absolute!important;left:0!important;right:0!important;top:68%!important;bottom:auto!important;height:3px!important;background:#43d9c4!important;box-shadow:0 0 16px #43d9c4aa!important;z-index:3!important;pointer-events:none}
 .adoa-hud-top{position:absolute;left:10px;right:10px;top:10px;z-index:6;display:grid;grid-template-columns:minmax(115px,1fr) minmax(0,2fr);gap:12px;align-items:start;pointer-events:none}
 .adoa-health{background:#090e16d9;border:1px solid #35435b;border-radius:10px;padding:8px 10px;max-width:230px}
 .adoa-health-label{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:800;color:#d7e1f2;margin-bottom:6px}
@@ -1174,13 +1181,13 @@ startGame=function(){
 function adoTickGame(){
   if(!gameRunning||!gameChart)return;
   const t=gameElapsed+(performance.now()-gameStartAt)/1000;
-  const effectiveT=t-((Number(offset)||0)+(Number(gameChart.editorOffsetMs??gameChart.offset)||0))/1000;
+  const effectiveT=t-(Number(gameChart.offset??offset)||0)/1000;
   // Apply timed visual events on the active game loop, including editor preview and seek.
   if(typeof adoApplyTimedVisualEvents==='function') adoApplyTimedVisualEvents(effectiveT);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
-  const approach=2.0/speed,judgeY=.71;
+  const approach=2.0/speed,judgeY=.68;
   const stage=document.getElementById('gameStage'),height=stage?.clientHeight||600;
   const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);
   const totalDuration=Math.max(adoDurationForChart(),last+1.05);
@@ -1224,7 +1231,7 @@ function adoGameKeyHandler(e){
   e.preventDefault();e.stopImmediatePropagation();
   if(e.repeat || adoHeldKeys.has(e.key))return;
   adoHeldKeys.add(e.key);adoRefreshHeldKeys();
-  const list=Array.isArray(gameChart.notes)?gameChart.notes:[],t=gameElapsed+(performance.now()-gameStartAt)/1000-((Number(offset)||0)+(Number(gameChart.editorOffsetMs??gameChart.offset)||0))/1000;
+  const list=Array.isArray(gameChart.notes)?gameChart.notes:[],t=gameElapsed+(performance.now()-gameStartAt)/1000-(Number(gameChart.offset??offset)||0)/1000;
   let best=-1,bestError=Infinity;
   for(let i=0;i<list.length;i++){if(gameHit.has(i)||gameMissed.has(i)||Number(list[i].lane)!==lane)continue;const err=(t-(Number(list[i].time)||0))*1000;if(Math.abs(err)<=100&&Math.abs(err)<Math.abs(bestError)){best=i;bestError=err;}}
   if(best<0)return;
@@ -1737,7 +1744,7 @@ async function refreshCharts(){
     wrapped.__adoaV6=true;window.restoreSnapshot=wrapped;
   }
   const offsetInput=$('editorOffsetMs');
-  if(offsetInput&&!offsetInput.dataset.adoaV6){offsetInput.dataset.adoaV6='1';const sync=()=>{const ms=editorOffset();saveLocalSettings();try{window.ADOAEditorAPI?.markDirty?.()}catch{};try{window.updateEditorViewport?.(Number($('seek')?.value)||0)}catch{}};offsetInput.addEventListener('input',sync);offsetInput.addEventListener('change',sync)}
+  if(offsetInput&&!offsetInput.dataset.adoaV6){offsetInput.dataset.adoaV6='1';const sync=()=>{const ms=editorOffset();if(typeof window.offset==='number')window.offset=ms;saveLocalSettings();try{window.ADOAEditorAPI?.markDirty?.()}catch{};try{window.updateEditorViewport?.(Number($('seek')?.value)||0)}catch{}};offsetInput.addEventListener('input',sync);offsetInput.addEventListener('change',sync)}
   const editor=$('editor');
   if(editor&&!editor.dataset.adoaV6Settings){editor.dataset.adoaV6Settings='1';const onChange=e=>{const el=e.target;if(el?.matches?.('input[id],select[id],textarea[id]')&&el.type!=='file'&&!/invincible/i.test(el.id))saveLocalSettings()};editor.addEventListener('input',onChange);editor.addEventListener('change',onChange)}
   try{const saved=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'null');if(saved)applySettings(saved)}catch(e){console.warn('[Editor v6] settings restore failed',e)}
@@ -1809,7 +1816,7 @@ async function refreshCharts(){
 
  // Restore and persist all editor controls. Offset is copied into both the chart and legacy settings variable.
  function snapshotSettings(){const controls={};document.querySelectorAll('#editor input[id],#editor select[id],#editor textarea[id]').forEach(el=>{if(el.type==='file'||/invincible/i.test(el.id))return;controls[el.id]=(el.type==='checkbox'||el.type==='radio')?{type:el.type,checked:el.checked}:{type:el.type||el.tagName.toLowerCase(),value:el.value}});return {version:1,controls,offsetMs:Number($('editorOffsetMs')?.value)||0}}
- function syncOffset(){const n=Number($('editorOffsetMs')?.value);return Number.isFinite(n)?n:0}
+ function syncOffset(){const n=Number($('editorOffsetMs')?.value);if(Number.isFinite(n)){try{offset=n;updateOffset?.()}catch{};try{if(typeof window.offset==='number')window.offset=n}catch{}}}
  function saveSettings(){try{syncOffset();localStorage.setItem(SETTINGS,JSON.stringify(snapshotSettings()))}catch(e){console.warn('[Editor v7] settings save failed',e)}}
  function restoreSettings(data){if(!data||typeof data!=='object')return;const controls=data.controls||data;for(const [id,v] of Object.entries(controls)){if(id==='version'||id==='offsetMs'||!v||typeof v!=='object'||/invincible/i.test(id))continue;const el=$(id);if(!el||el.type==='file')continue;if(v.type==='checkbox'||v.type==='radio')el.checked=!!v.checked;else if(v.value!==undefined)el.value=String(v.value)}if(Number.isFinite(Number(data.offsetMs))&&$('editorOffsetMs'))$('editorOffsetMs').value=String(data.offsetMs);syncOffset()}
  const seekInput=$('seek');if(seekInput&&!seekInput.dataset.v7Immediate){seekInput.dataset.v7Immediate='1';seekInput.addEventListener('input',()=>{const t=Number(seekInput.value)||0;try{window.renderNotes?.()}catch{};try{window.updateEditorViewport?.(t)}catch{};saveSettings()})}
@@ -1890,7 +1897,10 @@ async function refreshCharts(){
    const raw=offsetInput.value.trim();
    const n=raw===''?0:Number(raw);
    if(!Number.isFinite(n))return Number(offset)||0;
-   // Editor offset is independent; never modify the basic settings offset.
+   // The input and legacy gameplay variable are both milliseconds.
+   try{offset=n}catch{}
+   try{if(typeof updateOffset==='function')updateOffset()}catch(e){console.warn('[Editor v8] legacy offset sync failed',e)}
+   try{localStorage.setItem('rf_offset',String(n))}catch{}
    return n;
  }
  function captureSettings(){
@@ -2043,14 +2053,15 @@ async function refreshCharts(){
 (function(){
  'use strict';
  const $=id=>document.getElementById(id);
- const INPUT_KEY='adoa_offset_canonical_v10';
+ const INPUT_KEY='rf_offset';
  const SETTINGS_KEY='adoa_editor_settings_v9';
  const OLD_KEYS=['adoa_editor_settings_v8','adoa_editor_settings_v7','adoa_editor_settings_v5','adoa_editor_controls_v4'];
  const input=$('editorOffsetMs');
  if(!input)return;
  const read=()=>{const raw=String(input.value??'').trim();if(raw==='')return 0;const n=Number(raw);return Number.isFinite(n)?n:null};
  function writeLegacy(n){
-   // Save only the editor's own offset. The basic settings offset stays in rf_offset.
+   try{offset=n}catch{}
+   try{if(typeof updateOffset==='function')updateOffset()}catch(e){console.warn('[Offset v9] legacy sync:',e)}
    try{localStorage.setItem(INPUT_KEY,String(n))}catch(e){console.warn('[Offset v9] offset storage:',e)}
  }
  function save(){
@@ -2094,7 +2105,7 @@ async function refreshCharts(){
      for(const key of [SETTINGS_KEY,...OLD_KEYS]){try{const raw=localStorage.getItem(key);if(raw){data=JSON.parse(raw);if(data)break}}catch{}}
      const candidate=data?.offsetMs??data?.controls?.editorOffsetMs?.value??data?.controls?.editorOffsetMs;
      if(candidate!==undefined&&Number.isFinite(Number(candidate)))apply(Number(candidate),false);
-     else apply(0,false);
+     else apply(Number(offset)||0,false);
    }
  }catch(e){console.warn('[Offset v9] restore failed:',e)}
  // Projects: ensure the exact editor field is serialized and restored, regardless of legacy wrappers.
@@ -2128,17 +2139,18 @@ async function refreshCharts(){
  function getSaved(){
    try { const n=valid(localStorage.getItem(CANON)); if(n!==null)return n; } catch{}
    for(const k of LEGACY_SETTINGS){try{const d=JSON.parse(localStorage.getItem(k)||'null');const n=valid(d?.offsetMs??d?.controls?.editorOffsetMs?.value??d?.controls?.editorOffsetMs);if(n!==null)return n;}catch{}}
-   return null
+   try{return valid(localStorage.getItem('rf_offset'))}catch{return null}
  }
  function store(n){
    if(!Number.isFinite(n))return;
-   try{localStorage.setItem(CANON,String(n));}catch(e){console.warn('[Offset v10] local storage failed',e)}
+   try{localStorage.setItem(CANON,String(n));localStorage.setItem('rf_offset',String(n));}catch(e){console.warn('[Offset v10] local storage failed',e)}
+   try{if(typeof window.__setRhythmForgeOffset==='function')window.__setRhythmForgeOffset(n);else window.offset=n}catch{}
    try{if(input && input.value!==String(n))input.value=String(n)}catch{}
    try{const d=JSON.parse(localStorage.getItem('adoa_editor_settings_v9')||'{}');d.offsetMs=n;d.controls={...(d.controls||{}),editorOffsetMs:{type:'number',value:String(n)}};localStorage.setItem('adoa_editor_settings_v9',JSON.stringify(d))}catch{}
  }
  function current(){
    if(input){const n=valid(input.value);if(n!==null)return n;}
-   try{const n=valid(localStorage.getItem(CANON));if(n!==null)return n}catch{}
+   try{const n=valid(typeof window.__getRhythmForgeOffset==='function'?window.__getRhythmForgeOffset():window.offset);if(n!==null)return n}catch{}
    return 0;
  }
  function saveEditor(){const n=current();store(n);try{window.ADOAEditorAPI?.markDirty?.()}catch{};try{window.updateEditorViewport?.(Number($('seek')?.value)||0)}catch{}}
@@ -2153,7 +2165,13 @@ async function refreshCharts(){
  document.addEventListener('change',e=>{if(e.target===input)saveEditor()},true);
  document.addEventListener('focusout',e=>{if(e.target===input)saveEditor()},true);
  document.addEventListener('keydown',e=>{if(e.target===input&&e.key==='Enter')saveEditor()},true);
- // Basic settings buttons intentionally do not affect the editor offset.
+ // The settings-page +/-/reset buttons change the global offset. Sync that value
+ // back into the editor field after their existing click handlers have completed.
+ document.addEventListener('click',e=>{
+   const id=e.target?.closest?.('#offsetMinus,#offsetPlus,#offsetReset')?.id;
+   if(!id)return;
+   queueMicrotask(()=>{const n=valid(window.offset);if(n!==null)store(n)});
+ });
  window.addEventListener('pagehide',saveEditor);
  window.addEventListener('beforeunload',saveEditor);
  // Keep the canonical value in chart/project snapshots too.
