@@ -711,7 +711,7 @@ adoaViewStyle.textContent = `
 #gameStage:fullscreen .game-target{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 #gameStage:fullscreen .game-note{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1}
 #gameStage:fullscreen .game-overlay{font-size:clamp(18px,3vw,32px)}
-.game-judge-line{position:absolute;left:0;right:0;top:68%;height:2px;background:var(--accent2);box-shadow:0 0 12px #43d9c488;z-index:2;pointer-events:none}
+.game-judge-line{position:absolute;left:0;right:0;top:76%;height:2px;background:var(--accent2);box-shadow:0 0 12px #43d9c488;z-index:2;pointer-events:none}
 .game-speed-control{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
 .game-speed-control input{width:120px}
 #editorPlaySpeed{width:110px}
@@ -851,7 +851,7 @@ tickGame=function(){
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1));
   const approach=2.2/speed;
-  const judgeY=.68;
+  const judgeY=.76;
   const stage=document.getElementById('gameStage');
   const height=stage?stage.clientHeight:600;
   $('#gameClock').textContent=t.toFixed(3)+'s';
@@ -943,7 +943,7 @@ const adoaStableTickGame = function(){
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
   const approach=2.2/speed;
-  const judgeY=.68;
+  const judgeY=.76;
   const stage=document.getElementById('gameStage');
   const height=stage?stage.clientHeight:600;
   $('#gameClock').textContent=t.toFixed(3)+'s';
@@ -1007,7 +1007,7 @@ adoStyle.textContent = `
 #gameStage .game-targets{left:0!important;right:0!important;top:68%!important;bottom:auto!important;transform:translateY(-50%)!important;grid-template-columns:repeat(var(--game-lane-count,8),minmax(0,1fr))!important}
 #gameStage .game-target{width:calc(100% - 4px)!important;height:auto!important;aspect-ratio:1!important;max-width:none!important;border:2px solid #43d9c4;background:#43d9c422;box-shadow:0 0 16px #43d9c455}
 #gameStage .game-note{width:calc(100% / var(--game-lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1!important;border-radius:3px!important;transform:translate(-50%,-50%)!important}
-#gameStage .game-judge-line{display:block!important;position:absolute!important;left:0!important;right:0!important;top:68%!important;bottom:auto!important;height:3px!important;background:#43d9c4!important;box-shadow:0 0 16px #43d9c4aa!important;z-index:3!important;pointer-events:none}
+#gameStage .game-judge-line{display:block!important;position:absolute!important;left:0!important;right:0!important;top:76%!important;bottom:auto!important;height:3px!important;background:#43d9c4!important;box-shadow:0 0 16px #43d9c4aa!important;z-index:3!important;pointer-events:none}
 .adoa-hud-top{position:absolute;left:10px;right:10px;top:10px;z-index:6;display:grid;grid-template-columns:minmax(115px,1fr) minmax(0,2fr);gap:12px;align-items:start;pointer-events:none}
 .adoa-health{background:#090e16d9;border:1px solid #35435b;border-radius:10px;padding:8px 10px;max-width:230px}
 .adoa-health-label{display:flex;justify-content:space-between;gap:8px;font-size:11px;font-weight:800;color:#d7e1f2;margin-bottom:6px}
@@ -1187,7 +1187,7 @@ function adoTickGame(){
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
-  const approach=2.0/speed,judgeY=.68;
+  const approach=2.0/speed,judgeY=.76;
   const stage=document.getElementById('gameStage'),height=stage?.clientHeight||600;
   const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);
   const totalDuration=Math.max(adoDurationForChart(),last+1.05);
