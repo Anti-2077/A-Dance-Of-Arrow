@@ -2181,5 +2181,47 @@ async function refreshCharts(){
 })();
 </script>
 
+
+<style id="final-receptor-box-position-fix">
+/* Receptor squares: align the CENTER of each square to 80% of the playfield height. */
+#gameStage #gameTargets,
+#gameStage .game-targets {
+  position:absolute !important; left:0 !important; right:0 !important;
+  top:80% !important; bottom:auto !important;
+  transform:translateY(-50%) !important;
+  display:grid !important; align-items:center !important;
+}
+#gameStage #gameTargets .game-target,
+#gameStage .game-targets .game-target {
+  align-self:center !important; justify-self:center !important;
+}
+#editor #timeline #editorTargets,
+#editor .timeline #editorTargets,
+#editorTargets.editor-targets {
+  position:absolute !important; left:0 !important; right:0 !important;
+  top:80% !important; bottom:auto !important;
+  transform:translateY(-50%) !important;
+}
+#editorTargets .editor-target { align-self:center !important; justify-self:center !important; }
+</style>
+<script id="final-receptor-box-position-runtime-fix">
+(function(){
+  function alignReceptorBoxes(){
+    const game=document.getElementById('gameTargets');
+    if(game){game.style.setProperty('top','80%','important');game.style.setProperty('bottom','auto','important');game.style.setProperty('transform','translateY(-50%)','important');}
+    const editor=document.getElementById('editorTargets');
+    if(editor){editor.style.setProperty('top','80%','important');editor.style.setProperty('bottom','auto','important');editor.style.setProperty('transform','translateY(-50%)','important');}
+  }
+  alignReceptorBoxes();
+  document.addEventListener('DOMContentLoaded',alignReceptorBoxes);
+  window.addEventListener('resize',alignReceptorBoxes);
+  const oldBuild=window.buildGuides;
+  if(typeof oldBuild==='function'&&!oldBuild.__receptor80){
+    const wrapped=function(){const result=oldBuild.apply(this,arguments);alignReceptorBoxes();return result};
+    wrapped.__receptor80=true;window.buildGuides=wrapped;
+  }
+})();
+</script>
+
 </body>
 </html>
