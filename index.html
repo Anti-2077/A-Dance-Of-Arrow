@@ -57,7 +57,11 @@
 }
 </style>
 
-<style>.judge-line,.game-judge-line{display:none!important;box-shadow:none!important}.time-grid-line{display:none!important}</style>
+<style id="guide-visibility-fix">
+/* Beat guides stay visible; the gameplay judgment line is styled by the gameplay layout. */
+.judge-line{display:none!important;box-shadow:none!important}
+.time-grid-line{display:block!important}
+</style>
 
 <style id="keys-only-settings-ui">
 /* 설정 화면에는 키 매핑만 표시합니다. 기존 요소는 숨겨 두어 관련 스크립트가 오류 없이 유지되게 합니다. */
@@ -234,7 +238,7 @@ function selectGameChart(c){gameChart=c.chart||c;gameChartSource=c;$('#gameTitle
 function renderGameLanes(){const count=Math.max(1,Math.min(8,Number(gameChart?.keyCount)||8));$('#gameLanes').style.gridTemplateColumns=`repeat(${count},minmax(0,1fr))`;$('#gameLanes').innerHTML=Array.from({length:count},(_,i)=>`<div class="game-lane"><span class="game-lane-label" style="left:${(i+.5)/count*100}%">${i+1}</span></div>`).join('');$('#gameTargets').style.gridTemplateColumns=`repeat(${count},minmax(0,1fr))`;$('#gameTargets').innerHTML=Array.from({length:count},()=>'<div class="game-target"></div>').join('')}
 function stopGame(){gameRunning=false;cancelAnimationFrame(gameRAF);gameElapsed=0;gameHit=new Set();gameScore=0;gameMiss=0;$('#gameClock').textContent='0.000s';$('#gameSeek').value=0;$('#gameNotes').innerHTML='';$('#gameStats').textContent=`${gameChart?.bpm||180} BPM · ${gameChart?.keyCount||8}레인 · 점수 0 · 미스 0`;}
 function startGame(){if(!gameChart){toast('먼저 플레이할 채보를 선택하세요.');return}stopGame();gameRunning=true;gameStartAt=performance.now();$('#gameOverlay').classList.add('hidden');if(gameAudio){try{gameAudio.currentTime=0;gameAudio.play().catch(()=>{})}catch{}}gameRAF=requestAnimationFrame(tickGame)}
-function tickGame(){if(!gameRunning||!gameChart)return;let t=gameElapsed+(performance.now()-gameStartAt)/1000;const list=gameChart.notes||[],approach=2.2,judgeY=.88;$('#gameClock').textContent=t.toFixed(3)+'s';$('#gameStats').textContent=`${gameChart.bpm||180} BPM · ${gameChart.keyCount||8}레인 · 점수 ${gameScore} · 미스 ${gameMiss}`;$('#gameSeek').value=t;$('#gameNotes').innerHTML='';const count=Math.max(1,Number(gameChart.keyCount)||8);for(let ni=0;ni<list.length;ni++){const n=list[ni];const dt=Number(n.time)-t;if(gameHit.has(ni)||dt>approach||dt<-.18)continue;const el=document.createElement('div');el.className='game-note';el.style.left=(((Math.max(0,Math.min(count-1,Number(n.lane)||0))+.5)/count)*100)+'%';el.style.top=((judgeY-dt/approach*judgeY)*100)+'%';$('#gameNotes').appendChild(el)}const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);if(t>last+1.5){gameRunning=false;$('#gameOverlay').classList.remove('hidden');$('#gameOverlay').textContent=`플레이 완료! 점수 ${gameScore} · 미스 ${gameMiss}`;if(gameAudio)gameAudio.pause();return}gameRAF=requestAnimationFrame(tickGame)}
+function tickGame(){if(!gameRunning||!gameChart)return;let t=gameElapsed+(performance.now()-gameStartAt)/1000;const list=gameChart.notes||[],approach=2.2,judgeY=.80;$('#gameClock').textContent=t.toFixed(3)+'s';$('#gameStats').textContent=`${gameChart.bpm||180} BPM · ${gameChart.keyCount||8}레인 · 점수 ${gameScore} · 미스 ${gameMiss}`;$('#gameSeek').value=t;$('#gameNotes').innerHTML='';const count=Math.max(1,Number(gameChart.keyCount)||8);for(let ni=0;ni<list.length;ni++){const n=list[ni];const dt=Number(n.time)-t;if(gameHit.has(ni)||dt>approach||dt<-.18)continue;const el=document.createElement('div');el.className='game-note';el.style.left=(((Math.max(0,Math.min(count-1,Number(n.lane)||0))+.5)/count)*100)+'%';el.style.top=((judgeY-dt/approach*judgeY)*100)+'%';$('#gameNotes').appendChild(el)}const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);if(t>last+1.5){gameRunning=false;$('#gameOverlay').classList.remove('hidden');$('#gameOverlay').textContent=`플레이 완료! 점수 ${gameScore} · 미스 ${gameMiss}`;if(gameAudio)gameAudio.pause();return}gameRAF=requestAnimationFrame(tickGame)}
 $('#gamePlay').onclick=startGame;$('#gamePause').onclick=()=>{if(gameRunning){gameElapsed+=(performance.now()-gameStartAt)/1000;gameRunning=false;cancelAnimationFrame(gameRAF);if(gameAudio)gameAudio.pause();$('#gameOverlay').classList.remove('hidden');$('#gameOverlay').textContent='일시정지'}else if(gameChart){gameRunning=true;gameStartAt=performance.now();$('#gameOverlay').classList.add('hidden');if(gameAudio){try{gameAudio.currentTime=gameElapsed;gameAudio.play().catch(()=>{})}catch{}}gameRAF=requestAnimationFrame(tickGame)}};$('#gameRestart').onclick=startGame;$('#refreshGameCharts').onclick=()=>{window.ADOARefreshGameCharts();if(window.ADOARefreshCloudCharts)window.ADOARefreshCloudCharts()};$('#gameSeek').oninput=e=>{gameElapsed=Number(e.target.value)||0;if(gameChart){gameStartAt=performance.now();if(gameRunning)tickGame()}};
 window.addEventListener('keydown',e=>{if(!gameRunning||!gameChart||e.repeat||/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;const count=Math.max(1,Number(gameChart.keyCount)||8),mapping=keys[count]||keys[8];const lane=mapping.findIndex(k=>String(k).toUpperCase()===e.key.toUpperCase());if(lane<0)return;const t=gameElapsed+(performance.now()-gameStartAt)/1000,list=gameChart.notes||[];let best=-1,bestDiff=.18;for(let i=0;i<list.length;i++){if(gameHit.has(i)||Number(list[i].lane)!==lane)continue;const diff=Math.abs(Number(list[i].time)-t);if(diff<bestDiff){best=i;bestDiff=diff}}if(best>=0){gameHit.add(best);gameScore+=bestDiff<.06?300:bestDiff<.12?150:50}else{gameMiss++;}$('#gameStats').textContent=`${gameChart.bpm||180} BPM · ${count}레인 · 점수 ${gameScore} · 미스 ${gameMiss}`;});
 let autoChart=null;
@@ -270,7 +274,7 @@ tickGame = function(){
   const t = gameElapsed + (performance.now() - gameStartAt) / 1000;
   const list = Array.isArray(gameChart.notes) ? gameChart.notes : [];
   const approach = 2.2;
-  const judgeY = 0.88;
+  const judgeY = 0.80;
   const count = Math.max(1, Math.min(8, Number(gameChart.keyCount) || 8));
 
   $('#gameClock').textContent = t.toFixed(3) + 's';
@@ -637,7 +641,7 @@ tickGame = function(){
   const list = Array.isArray(gameChart.notes) ? gameChart.notes : [];
   const count = Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
   const approach = 2.0;
-  const judgeY = 0.88;
+  const judgeY = 0.80;
   const stage = document.getElementById('gameStage');
   const height = stage ? stage.clientHeight : 500;
   $('#gameClock').textContent=t.toFixed(3)+'s';
@@ -701,7 +705,7 @@ const adoaViewStyle = document.createElement('style');
 adoaViewStyle.textContent = `
 #timeline{height:560px!important;max-height:560px;overflow:hidden!important;position:relative}
 #guides,#notes{position:absolute;left:0;right:0;top:0;bottom:auto;height:100%;will-change:transform}
-#editorTargets{position:absolute;left:0;right:0;bottom:12%!important;transform:translateY(50%);z-index:5;pointer-events:none}
+#editorTargets{position:absolute;left:0;right:0;top:80%!important;bottom:auto!important;transform:translateY(-50%);z-index:5;pointer-events:none}
 #editorTargets .editor-target{width:calc(100% - 4px)!important;height:auto!important;aspect-ratio:1;min-width:0;padding:0}
 #notes .note{width:calc(100% / var(--lane-count,8) - 4px)!important;height:auto!important;aspect-ratio:1;line-height:0;border-radius:3px;padding:0;z-index:3}
 #gameStage:fullscreen{width:100vw!important;height:100vh!important;min-height:100vh!important;max-height:100vh!important;border:0!important;border-radius:0!important;background:#05080e}
@@ -745,7 +749,7 @@ function updateEditorViewport(time){
   $('#notes').style.height=worldH+'px';
   $('#guides').style.transform=`translateY(${-adoaEditorScrollOffset}px)`;
   $('#notes').style.transform=`translateY(${-adoaEditorScrollOffset}px)`;
-  $('#editorTargets').style.transform='translateY(50%)';
+  $('#editorTargets').style.setProperty('top','80%');$('#editorTargets').style.setProperty('bottom','auto');$('#editorTargets').style.transform='translateY(-50%)';
   $('#seek').max=String(Math.max(1,dur));
   if(!$('#seek').matches(':active')) $('#seek').value=String(t);
   $('#now').textContent=t.toFixed(3)+'s';
@@ -772,7 +776,7 @@ buildGuides = function(){
   updateEditorViewport(adoaCurrentEditorTime());
 };
 
-// The editor seek bar is a viewport scrubber: guides/notes move, while the receptor row stays fixed.
+// The editor seek bar moves the beat guides and notes so the selected time meets the fixed 80% receptor row.
 $('#seek').oninput=e=>{
   const t=Math.max(0,Number(e.target.value)||0);
   if(audio){try{audio.currentTime=Math.min(t,Number.isFinite(audio.duration)?audio.duration:t)}catch{}}
@@ -837,7 +841,7 @@ if(!document.getElementById('gameSpeedControl')){
 const adoaSpeedInput=$('#gameSpeed');
 if(adoaSpeedInput) adoaSpeedInput.oninput=()=>{$('#gameSpeedValue').textContent=Number(adoaSpeedInput.value).toFixed(1)+'×'};
 
-// Receptor line stays at 68% of the stage; note arrival time is calculated against that exact line.
+// Receptor line stays at 80% of the stage; note arrival time is calculated against that exact line.
 const gameStage=document.getElementById('gameStage');
 if(gameStage && !document.getElementById('gameJudgeLine')){
   const line=document.createElement('div');line.id='gameJudgeLine';line.className='game-judge-line';gameStage.insertBefore(line,document.getElementById('gameTargets'));
@@ -1418,7 +1422,7 @@ async function refreshCharts(){
     return clamp(Math.max(1, Number.isFinite(saved)&&saved>0?saved:90, last+beatStep()*4),1,600);
   };
   const pxPerSecond = () => 80 * speed();
-  const receptorY = () => viewportHeight * .88;
+  const receptorY = () => viewportHeight * .80;
   const worldHeight = () => Math.max(viewportHeight, duration()*pxPerSecond()+receptorY());
   let laneLayer = $('guides');
   if(laneLayer){
@@ -1848,7 +1852,7 @@ async function refreshCharts(){
    const lane=clamp(Math.floor((e.clientX-rect.left)/rect.width*count),0,count-1);
    const speed=Math.max(.5,Math.min(10,Number($('gameSpeed')?.value)||1));
    const seek=Number($('seek')?.value)||0;
-   const scale=80*speed, receptorY=560*.88;
+   const scale=80*speed, receptorY=560*.8;
    const time=seek+(receptorY-(e.clientY-rect.top))/scale;
    const threshold=Math.max(.018,beatSeconds()*.48);
    const ns=window.getEditorNotes?.()||[];
@@ -2181,47 +2185,6 @@ async function refreshCharts(){
 })();
 </script>
 
-
-<style id="final-receptor-box-position-fix">
-/* Receptor squares: align the CENTER of each square to 80% of the playfield height. */
-#gameStage #gameTargets,
-#gameStage .game-targets {
-  position:absolute !important; left:0 !important; right:0 !important;
-  top:80% !important; bottom:auto !important;
-  transform:translateY(-50%) !important;
-  display:grid !important; align-items:center !important;
-}
-#gameStage #gameTargets .game-target,
-#gameStage .game-targets .game-target {
-  align-self:center !important; justify-self:center !important;
-}
-#editor #timeline #editorTargets,
-#editor .timeline #editorTargets,
-#editorTargets.editor-targets {
-  position:absolute !important; left:0 !important; right:0 !important;
-  top:80% !important; bottom:auto !important;
-  transform:translateY(-50%) !important;
-}
-#editorTargets .editor-target { align-self:center !important; justify-self:center !important; }
-</style>
-<script id="final-receptor-box-position-runtime-fix">
-(function(){
-  function alignReceptorBoxes(){
-    const game=document.getElementById('gameTargets');
-    if(game){game.style.setProperty('top','80%','important');game.style.setProperty('bottom','auto','important');game.style.setProperty('transform','translateY(-50%)','important');}
-    const editor=document.getElementById('editorTargets');
-    if(editor){editor.style.setProperty('top','80%','important');editor.style.setProperty('bottom','auto','important');editor.style.setProperty('transform','translateY(-50%)','important');}
-  }
-  alignReceptorBoxes();
-  document.addEventListener('DOMContentLoaded',alignReceptorBoxes);
-  window.addEventListener('resize',alignReceptorBoxes);
-  const oldBuild=window.buildGuides;
-  if(typeof oldBuild==='function'&&!oldBuild.__receptor80){
-    const wrapped=function(){const result=oldBuild.apply(this,arguments);alignReceptorBoxes();return result};
-    wrapped.__receptor80=true;window.buildGuides=wrapped;
-  }
-})();
-</script>
 
 </body>
 </html>
