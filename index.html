@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<link rel="stylesheet" href="css/styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A Dance Of Arrow — 리듬게임 제작실</title>
+
+
+
+
+
+
+
+</head>
+<body>
+<header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">로그인 전</div></header>
+<main>
+<div id="screen-root" aria-live="polite"></div>
+</main>
+<div class="modal-back hidden" id="loginModal"><div class="modal"><button class="close" id="closeModal">×</button><h2>로그인</h2><p class="muted">데모 로그인입니다. 실제 계정 인증은 연결되어 있지 않습니다.</p><input id="nickname" placeholder="닉네임" value="Player"><button class="primary wide" id="loginDemo">데모 로그인</button><button class="wide" id="guestFromModal">게스트로 시작</button></div></div>
+<div class="toast" id="toast"></div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script>
+(async function loadRhythmForge(){
+  const screens = ["home-login.html", "main-menu.html", "gameplay.html", "auto-chart.html", "community.html", "editor.html", "settings.html"];
+  const root = document.getElementById('screen-root');
+  try {
+    const parts = await Promise.all(screens.map(async file => {
+      const response = await fetch('screens/' + file);
+      if (!response.ok) throw new Error('화면 파일을 불러오지 못했습니다: ' + file);
+      return response.text();
+    }));
+    root.innerHTML = parts.join(' ');
+    const scripts = [{"file": "app-core.js", "module": false}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}];
+    for (const item of scripts) {
+      await new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = 'js/' + item.file;
+        if (item.module) el.type = 'module';
+        el.onload = resolve;
+        el.onerror = () => reject(new Error('스크립트를 불러오지 못했습니다: ' + item.file));
+        document.body.appendChild(el);
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    root.innerHTML = '<section class="screen active"><div class="panel"><h2>사이트를 불러오지 못했어요</h2><p>GitHub Pages에 index.html, css, js, screens 폴더가 모두 업로드되었는지 확인해 주세요.</p><p class="muted"></p></div></section>';
+    const p = root.querySelector('.muted'); if (p) p.textContent = error.message;
+  }
+})();
+</script>
+</body>
+</html>
