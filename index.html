@@ -18,7 +18,7 @@
 <main>
 <div id="screen-root" aria-live="polite"></div>
 </main>
-<div class="modal-back hidden" id="loginModal"><div class="modal"><button class="close" id="closeModal">×</button><h2>로그인</h2><p class="muted">데모 로그인입니다. 실제 계정 인증은 연결되어 있지 않습니다.</p><input id="nickname" placeholder="닉네임" value="Player"><button class="primary wide" id="loginDemo">데모 로그인</button><button class="wide" id="guestFromModal">게스트로 시작</button></div></div>
+<div class="modal-back hidden" id="loginModal"><div class="modal"><button class="close" id="closeModal">×</button><h2>로그인</h2><p class="muted">로그인 창을 준비하고 있습니다…</p><input id="nickname" placeholder="닉네임" value="Player"><button class="primary wide" id="loginDemo">로그인</button><button class="wide" id="guestFromModal">게스트로 시작</button></div></div>
 <div class="toast" id="toast"></div>
 
 
@@ -43,7 +43,7 @@
 
 
 <script>
-(async function loadRhythmForge(){
+(async function loadADanceOfArrow(){
   const screens = ["home-login.html", "main-menu.html", "gameplay.html", "auto-chart.html", "community.html", "editor.html", "settings.html"];
   const root = document.getElementById('screen-root');
   try {
@@ -53,7 +53,7 @@
       return response.text();
     }));
     root.innerHTML = parts.join(' ');
-    const scripts = [{"file": "app-core.js", "module": false}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}];
+    const scripts = [{"file": "app-core.js", "module": false}, {"file": "firebase-auth.js", "module": true}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}];
     for (const item of scripts) {
       await new Promise((resolve, reject) => {
         const el = document.createElement('script');
