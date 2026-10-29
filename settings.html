@@ -1,0 +1,10 @@
+<!-- Loaded by index.html. Keep the existing IDs intact for app compatibility. -->
+<section id="settings" class="screen">
+ <div class="heading"><div><div class="eyebrow">SETTINGS</div><h2>설정</h2></div><button class="back">← 메인으로</button></div>
+ <div class="settings-grid">
+  <div class="panel"><h3>⌨ 키 매핑</h3><p class="muted">4키, 6키, 8키 설정은 각각 따로 저장됩니다. 키 버튼을 누르고 원하는 키를 입력하세요.</p><div class="tabs"><button class="active" data-keytab="4">4키</button><button data-keytab="6">6키</button><button data-keytab="8">8키</button></div><div id="keyRows"></div><button id="resetKeys" class="wide">기본 키로 초기화</button></div>
+  <div class="panel"><h3>⏱ 오프셋 테스트</h3><p class="muted">움직이는 화살표가 판정선에 닿을 때 설정한 첫 번째 키를 누르는 방식의 간단한 테스트 화면입니다.</p><div class="offset-demo"><div class="fall" id="fallArrow">↓</div><div class="hitline"></div><div class="target" id="targetArrow">↑</div></div><div class="offset-number"><span id="offsetValue">0</span> ms</div><div class="offset-controls"><button id="offsetMinus">− 1ms</button><button id="offsetReset">초기화</button><button id="offsetPlus">+ 1ms</button></div><p class="help" id="offsetHint">첫 번째 4키: D</p></div>
+  <div class="panel"><h3>🔊 볼륨</h3><label class="sliderline">음악 볼륨 <span id="musicVal">100%</span><input id="musicVol" type="range" min="0" max="100" value="100"></label><label class="sliderline">효과음 볼륨 <span id="sfxVal">80%</span><input id="sfxVol" type="range" min="0" max="100" value="80"></label><label class="sliderline">키음 볼륨 <span id="keyVal">80%</span><input id="keyVol" type="range" min="0" max="100" value="80"></label></div>
+  <div class="panel"><h3>🧩 편의 기능</h3><label class="check"><input type="checkbox" id="snap" checked> 박자 스냅 사용</label><label class="check"><input type="checkbox" id="autosave"> 이 브라우저에 자동 저장</label><label class="check"><input type="checkbox" id="tips" checked> 도움말 표시</label><p class="help">계정 간 동기화는 서버가 필요합니다. 이 프로토타입은 설정과 편집 데이터를 현재 브라우저에 저장합니다.</p></div>
+ </div>
+</section>
