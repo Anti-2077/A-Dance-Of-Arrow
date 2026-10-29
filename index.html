@@ -53,7 +53,7 @@
       return response.text();
     }));
     root.innerHTML = parts.join(' ');
-    const scripts = [{"file": "app-core.js", "module": false}, {"file": "firebase-auth.js", "module": true}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}];
+    const scripts = [{"file": "app-core.js", "module": false}, {"file": "firebase-auth.js", "module": true}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}, {"file": "cloud-sync.js", "module": true}];
     for (const item of scripts) {
       await new Promise((resolve, reject) => {
         const el = document.createElement('script');

@@ -1,14 +1,16 @@
 // 1) Firebase Console > 프로젝트 설정 > 내 앱 > SDK 설정에서 받은 웹 앱 설정으로 아래 값을 바꾸세요.
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js';
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js';
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp } from 'https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js';
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyAdDjMKY59ZA2q56CV2cGgNMlU0HbtPc8",
+  authDomain: "a-dance-of-arrow.firebaseapp.com",
+  databaseURL: "https://a-dance-of-arrow-default-rtdb.firebaseio.com",
+  projectId: "a-dance-of-arrow",
+  storageBucket: "a-dance-of-arrow.firebasestorage.app",
+  messagingSenderId: "417615296079",
+  appId: "1:417615296079:web:e4cb24b966a2c30d5d1c3a",
+  measurementId: "G-Y3GN9RBL3H"
 };
 // 원하는 개발자 코드로 바꾸세요. HTML에 들어 있으므로 보안용 비밀번호로 사용하지 마세요.
 const DEVELOPER_CODE = '9292';
@@ -18,10 +20,10 @@ let selectedJson = null;
 const $id = id => document.getElementById(id);
 const safeText = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function setCloudStatus(message){ $id('cloudStatus').textContent = message; }
-function configReady(){ return firebaseConfig.apiKey !== 'YOUR_API_KEY' && firebaseConfig.projectId !== 'YOUR_PROJECT_ID' && firebaseConfig.appId !== 'YOUR_APP_ID'; }
+function configReady(){ return !!firebaseConfig.apiKey && !!firebaseConfig.projectId && !!firebaseConfig.appId; }
 try {
   if(configReady()){
-    const app = initializeApp(firebaseConfig);
+    const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
     db = getFirestore(app);
     setCloudStatus('Firebase 연결 준비 완료');
     await refreshCharts();

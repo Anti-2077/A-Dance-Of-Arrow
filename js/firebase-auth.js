@@ -3,7 +3,7 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, si
 
 // Firebase web config. These client-side values are not password secrets.
 const firebaseConfig = {
-  apiKey: "AIzaSyAdDjMKY59ZA2q56CVV2cGgNMlU0HbtPc8",
+  apiKey: "AIzaSyAdDjMKY59ZA2q56CV2cGgNMlU0HbtPc8",
   authDomain: "a-dance-of-arrow.firebaseapp.com",
   databaseURL: "https://a-dance-of-arrow-default-rtdb.firebaseio.com",
   projectId: "a-dance-of-arrow",
