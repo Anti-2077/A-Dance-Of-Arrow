@@ -88,11 +88,6 @@ function tickGame(){if(!gameRunning||!gameChart)return;let t=gameElapsed+(perfor
 $('#gamePlay').onclick=startGame;$('#gamePause').onclick=()=>{if(gameRunning){gameElapsed+=(performance.now()-gameStartAt)/1000;gameRunning=false;cancelAnimationFrame(gameRAF);if(gameAudio)gameAudio.pause();$('#gameOverlay').classList.remove('hidden');$('#gameOverlay').textContent='일시정지'}else if(gameChart){gameRunning=true;gameStartAt=performance.now();$('#gameOverlay').classList.add('hidden');if(gameAudio){try{gameAudio.currentTime=gameElapsed;gameAudio.play().catch(()=>{})}catch{}}gameRAF=requestAnimationFrame(tickGame)}};$('#gameRestart').onclick=startGame;$('#refreshGameCharts').onclick=()=>{window.ADOARefreshGameCharts()};$('#gameSeek').oninput=e=>{gameElapsed=Number(e.target.value)||0;if(gameChart){gameStartAt=performance.now();if(gameRunning)tickGame()}};
 window.addEventListener('keydown',e=>{if(!gameRunning||!gameChart||e.repeat||/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName))return;const count=Math.max(1,Number(gameChart.keyCount)||8),mapping=keys[count]||keys[8];const lane=mapping.findIndex(k=>String(k).toUpperCase()===e.key.toUpperCase());if(lane<0)return;const t=gameElapsed+(performance.now()-gameStartAt)/1000,list=gameChart.notes||[];let best=-1,bestDiff=.18;for(let i=0;i<list.length;i++){if(gameHit.has(i)||Number(list[i].lane)!==lane)continue;const diff=Math.abs(Number(list[i].time)-t);if(diff<bestDiff){best=i;bestDiff=diff}}if(best>=0){gameHit.add(best);gameScore+=bestDiff<.06?300:bestDiff<.12?150:50}else{gameMiss++;}$('#gameStats').textContent=`${gameChart.bpm||180} BPM · ${count}레인 · 점수 ${gameScore} · 미스 ${gameMiss}`;});
 let autoChart=null;
-$('#autoAudioFile').onchange=e=>{const f=e.target.files?.[0];if(!f)return;if(autoAudioUrl)URL.revokeObjectURL(autoAudioUrl);autoAudioUrl=URL.createObjectURL(f);const a=new Audio(autoAudioUrl);a.onloadedmetadata=()=>{autoAudioDuration=Number.isFinite(a.duration)?a.duration:90;$('#autoAudioName').textContent=f.name+' · '+autoAudioDuration.toFixed(1)+'초';$('#autoStatus').textContent='음악 길이를 읽었습니다. BPM/박자를 설정하고 자동 채보를 생성하세요.'};a.onerror=()=>{$('#autoAudioName').textContent=f.name+' · 길이 확인 불가';};};
-$('#generateAutoChart').onclick=()=>{const bpm=Math.max(30,Math.min(400,Number($('#autoBpm').value)||180)),meter=Number($('#autoMeter').value)||4,sub=Number($('#autoSubdivision').value)||4,lanes=Number($('#autoLanes').value)||8,density=Number($('#autoDensity').value)||2,duration=autoAudioUrl?autoAudioDuration:90,step=60/bpm/sub,notes=[];let prev=-1;for(let t=0,idx=0;t<duration;t+=step,idx++){const beatIndex=Math.round(t/step);const strong=beatIndex%(sub*meter)===0;const allow=(density===4)||(density===3?idx%2===0:density===2?(idx%2===0||strong):strong);if(!allow)continue;let lane;if(strong)lane=(Math.floor(beatIndex/(sub*meter))*3+Math.floor(beatIndex/sub))%lanes;else lane=(beatIndex*7+Math.floor(beatIndex/3)+1)%lanes;if(lane===prev)lane=(lane+1+(beatIndex%Math.max(1,lanes-1)))%lanes;notes.push({time:Number(t.toFixed(4)),lane,pos:Math.min(1,t/(step*64)),id:Date.now()+idx});prev=lane;}autoChart={format:'RhythmForgeChart',version:1,bpm,subdivision:sub,keyCount:lanes,offset,notes,events:[],effects:[],images:[],title:$('#autoTitle').value.trim()||'자동 생성 채보',artist:$('#autoArtist').value.trim()||'Unknown',difficulty:['','Easy','Normal','Hard','Expert'][density]};gameAudioUrl=autoAudioUrl;$('#autoStatus').textContent=`완료: ${notes.length}개 노트 · ${bpm} BPM · ${meter}${meter===6?'/8':'/4'} 박자 설정 · ${duration.toFixed(1)}초`;toast('자동 채보를 생성했습니다.');};
-$('#previewAutoChart').onclick=()=>{if(!autoChart){toast('먼저 자동 채보를 생성하세요.');return}const c={...autoChart,audioUrl:autoAudioUrl,source:'generated'};selectGameChart(c);show('game');};
-$('#editAutoChart').onclick=()=>{if(!autoChart){toast('먼저 자동 채보를 생성하세요.');return}loadChartIntoEditor(autoChart);show('editor');};
-$('#saveAutoChart').onclick=()=>{if(!autoChart){toast('먼저 자동 채보를 생성하세요.');return}const blob=new Blob([JSON.stringify(autoChart,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='adoa-auto-chart.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 function loadChartIntoEditor(d){notes=(d.notes||[]).map(n=>({...n,id:Date.now()+Math.random(),pos:positionFromTime(n.time)}));events=d.events||[];effects=d.effects||[];images=d.images||[];$('#bpm').value=d.bpm||180;$('#subdivision').value=d.subdivision||4;$('#keyCount').value=d.keyCount||8;selected=null;buildGuides();renderEvents();renderEffects();renderImages();localStorage.setItem('rf_chart',JSON.stringify({notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}));if(autoAudioUrl){if(audio)audio.pause();audioUrl=autoAudioUrl;audio=new Audio(audioUrl);audio.onloadedmetadata=()=>{duration=audio.duration;$('#duration').textContent=duration.toFixed(3)+'s';$('#seek').max=duration};}toast('채보를 에디터로 가져왔습니다.')}
 window.ADOARefreshGameCharts();
 
@@ -170,48 +165,6 @@ startGame = function(){
 };
 
 // 게임 입력 판정은 파일 끝의 통합 판정 시스템에서 처리합니다.
-
-// 자동 채보: 박자 단위와 마디 단위를 구분해 패턴을 만듭니다.
-$('#generateAutoChart').onclick = function(){
-  const bpm = Math.max(30, Math.min(400, Number($('#autoBpm').value)||180));
-  const meter = Number($('#autoMeter').value)||4;
-  const sub = Number($('#autoSubdivision').value)||4;
-  const lanes = Math.max(4, Math.min(8, Number($('#autoLanes').value)||8));
-  const density = Number($('#autoDensity').value)||2;
-  const duration = autoAudioUrl ? autoAudioDuration : 90;
-  const step = 60 / bpm / sub;
-  const notes = [];
-  let previousLane = -1;
-  const totalSteps = Math.ceil(duration / step);
-  for(let idx=0; idx<totalSteps; idx++){
-    const beatInBar = Math.floor(idx / sub) % meter;
-    const isBeat = idx % sub === 0;
-    const isDownbeat = idx % (sub * meter) === 0;
-    let allow = false;
-    if(density === 1) allow = isDownbeat || (isBeat && beatInBar === 2);
-    else if(density === 2) allow = isBeat || (idx % sub === Math.floor(sub/2));
-    else if(density === 3) allow = isBeat || idx % 2 === 0;
-    else allow = true;
-    if(!allow) continue;
-
-    let lane;
-    if(isDownbeat) lane = Math.floor(idx/(sub*meter)) % lanes;
-    else lane = (idx * 3 + Math.floor(idx/sub) * 2 + 1) % lanes;
-    if(lane === previousLane) lane = (lane + 1) % lanes;
-    const time = idx * step;
-    notes.push({time:Number(time.toFixed(4)), lane, pos:Math.min(1,time/duration), id:Date.now()+idx});
-    previousLane = lane;
-  }
-  autoChart = {
-    format:'RhythmForgeChart', version:1, bpm, subdivision:sub, meter,
-    keyCount:lanes, offset, notes, events:[], effects:[], images:[],
-    title:$('#autoTitle').value.trim() || '자동 생성 채보',
-    artist:$('#autoArtist').value.trim() || 'Unknown',
-    difficulty:['','Easy','Normal','Hard','Expert'][density]
-  };
-  $('#autoStatus').textContent = `완료: ${notes.length}개 노트 · ${bpm} BPM · ${meter}/${meter===6?8:4} 박자 · ${duration.toFixed(1)}초. 참고: 음악 파형을 AI 분석한 것이 아니라 설정한 박자에 따른 자동 생성입니다.`;
-  toast('자동 채보를 생성했습니다.');
-};
 
 // 에디터로 가져올 때는 기존 오디오를 정리하고 노트/레인 UI를 함께 다시 그립니다.
 const originalLoadChartIntoEditor = loadChartIntoEditor;
@@ -1144,5 +1097,19 @@ if(window.ADOAChartBridge){
     window.ADOAChartBridge.loadChart=function(data){previousBridgeLoad(data);const st=data?.settings||{};if(st.gameSpeed!=null&&$('#gameSpeed'))$('#gameSpeed').value=String(Math.max(.5,Math.min(10,Number(st.gameSpeed)||1)));if(st.chartDuration!=null&&$('#chartDurationInput'))$('#chartDurationInput').value=String(st.chartDuration);if(st.editorOffsetMs!=null&&$('#editorOffsetMs'))$('#editorOffsetMs').value=String(st.editorOffsetMs);if(st.snap!=null&&$('#snap'))$('#snap').checked=!!st.snap;if(st.autosave!=null&&$('#autosave'))$('#autosave').checked=!!st.autosave;if(st.tips!=null&&$('#tips'))$('#tips').checked=!!st.tips;if(st.guidesVisible!=null)window.adoaGuidesVisible=!!st.guidesVisible;const ns=window.getEditorNotes?.()||[];ns.forEach((n,i)=>n.speed=Number(data?.notes?.[i]?.speed)||Number(st.gameSpeed)||1);window.buildGuides?.();window.renderNotes?.();};
   }
 }
+
+// Public boundary for the isolated AI auto-chart module. All mutable legacy state
+// remains private to this IIFE; the AI module communicates only through this API.
+window.ADOAAutoChartBridge = {
+  toast: message => toast(message),
+  getOffset: () => Number(offset)||0,
+  setOffset: value => { const n=Number(value); if(Number.isFinite(n)){ offset=n; updateOffset(); const field=$('#editorOffsetMs'); if(field&&field.value!==String(n)){ field.value=String(n); field.dispatchEvent(new Event('input',{bubbles:true})); field.dispatchEvent(new Event('change',{bubbles:true})); } } },
+  setAudio: (url,seconds) => { autoAudioUrl=url||null; gameAudioUrl=url||null; if(Number.isFinite(Number(seconds))&&Number(seconds)>0)autoAudioDuration=Number(seconds); },
+  getAudioDuration: () => Number(autoAudioDuration)||90,
+  setChart: chart => { autoChart=chart||null; },
+  getChart: () => autoChart,
+  preview: chart => { if(!chart)return; selectGameChart({...chart,audioUrl:autoAudioUrl,source:'generated'}); showOriginal('game'); },
+  edit: chart => { if(!chart)return; loadChartIntoEditor(chart); showOriginal('editor'); requestAnimationFrame(()=>{buildGuides();renderNotes();}); }
+};
 
 })();

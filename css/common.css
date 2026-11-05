@@ -89,3 +89,14 @@
 .adoa-combo.active{visibility:visible;animation:adoaComboOneSecond 1s ease-out forwards}
 .adoa-combo.pulse{animation:adoaComboOneSecond 1s ease-out forwards}
 @keyframes adoaComboOneSecond{0%{opacity:0;transform:translate(-50%,-50%) scale(.78)}14%{opacity:1;transform:translate(-50%,-50%) scale(1.13)}28%{opacity:1;transform:translate(-50%,-50%) scale(1)}88%{opacity:1;transform:translate(-50%,-52%) scale(1)}100%{opacity:0;visibility:hidden;transform:translate(-50%,-56%) scale(.98)}}
+
+/* ===== AI auto-chart analysis panel ===== */
+.auto-analysis-panel{margin:14px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:#0b111c}
+.auto-analysis-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.auto-analysis-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.auto-analysis-grid>div{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #27344a;border-radius:8px;background:#111a29;min-width:0}
+.auto-analysis-grid strong{font-size:17px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.auto-analysis-grid .muted{font-size:11px}
+.auto-progress-track{height:5px;background:#202b3d;border-radius:99px;overflow:hidden;margin-top:10px}
+.auto-progress-fill{height:100%;width:0;background:var(--accent2);transition:width .15s ease}
+@media(max-width:700px){.auto-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}

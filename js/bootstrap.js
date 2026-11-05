@@ -8,7 +8,7 @@
     'chart-library.html', 'editor.html', 'editor-play.html', 'settings.html'
   ];
   const scripts = [
-    'app-core.js', 'local-chart-library.js', 'editor-engine.js',
+    'app-core.js', 'auto-chart-ai.js', 'local-chart-library.js', 'editor-engine.js',
     'editor-controls.js', 'offset-visual-events.js', 'editor-stability.js',
     'editor-seek-offset.js', 'offset-persistence-v9.js', 'offset-persistence-v10.js'
   ];
