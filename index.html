@@ -14,11 +14,11 @@
 
 </head>
 <body>
-<header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">로그인 전</div></header>
+<header class="top"><div class="logo">♫ A DANCE <span>OF ARROW</span></div><div class="user-status" id="userStatus">기기 내 저장 모드</div></header>
 <main>
 <div id="screen-root" aria-live="polite"></div>
 </main>
-<div class="modal-back hidden" id="loginModal"><div class="modal"><button class="close" id="closeModal">×</button><h2>로그인</h2><p class="muted">로그인 창을 준비하고 있습니다…</p><input id="nickname" placeholder="닉네임" value="Player"><button class="primary wide" id="loginDemo">로그인</button><button class="wide" id="guestFromModal">게스트로 시작</button></div></div>
+
 <div class="toast" id="toast"></div>
 
 
@@ -53,7 +53,7 @@
       return response.text();
     }));
     root.innerHTML = parts.join(' ');
-    const scripts = [{"file": "app-core.js", "module": false}, {"file": "firebase-auth.js", "module": true}, {"file": "community-cloud.js", "module": true}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}, {"file": "cloud-sync.js", "module": true}];
+    const scripts = [{"file": "app-core.js", "module": false}, {"file": "local-chart-library.js", "module": false}, {"file": "editor-engine.js", "module": false}, {"file": "editor-controls.js", "module": false}, {"file": "offset-visual-events.js", "module": false}, {"file": "editor-stability.js", "module": false}, {"file": "editor-seek-offset.js", "module": false}, {"file": "offset-persistence-v9.js", "module": false}, {"file": "offset-persistence-v10.js", "module": false}];
     for (const item of scripts) {
       await new Promise((resolve, reject) => {
         const el = document.createElement('script');
