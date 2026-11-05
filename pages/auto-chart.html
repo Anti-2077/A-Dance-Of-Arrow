@@ -1,0 +1,10 @@
+<!-- Loaded by index.html. Keep the existing IDs intact for app compatibility. -->
+<section id="autochart" class="screen">
+ <div class="heading"><div><div class="eyebrow">AUTO CHART STUDIO</div><h2>자동 채보 생성</h2></div><button class="back">← 메인으로</button></div>
+ <div class="panel"><p class="muted">음악 파일을 선택하고 BPM과 박자 분할을 지정하면 자동으로 노트를 배치합니다. 이 버전은 브라우저 안에서 규칙 기반으로 패턴을 생성하며, 외부 AI 모델이나 서버 분석을 호출하지는 않습니다.</p>
+  <div class="toolbar"><label class="filebutton">♪ 음악 파일 선택<input id="autoAudioFile" type="file" accept="audio/*"></label><span id="autoAudioName" class="muted">음악 파일 선택 안 됨</span></div>
+  <div class="toolbar"><label>BPM <input id="autoBpm" type="number" min="30" max="400" value="180"></label><label>박자 <select id="autoMeter"><option value="4">4/4</option><option value="3">3/4</option><option value="6">6/8</option><option value="5">5/4</option></select></label><label>분할 <select id="autoSubdivision"><option value="1">4분음표</option><option value="2">8분음표</option><option value="4" selected>16분음표</option><option value="8">32분음표</option></select></label><label>레인 <select id="autoLanes"><option value="8" selected>8레인</option><option value="6">6레인</option><option value="4">4레인</option></select></label><label>밀도 <select id="autoDensity"><option value="1">쉬움</option><option value="2" selected>보통</option><option value="3">어려움</option><option value="4">매우 어려움</option></select></label></div>
+  <div class="toolbar"><label>곡 이름 <input id="autoTitle" type="text" placeholder="곡 이름" style="width:180px"></label><label>제작자 <input id="autoArtist" type="text" placeholder="제작자" style="width:160px"></label><button class="primary" id="generateAutoChart">✦ 자동 채보 만들기</button></div>
+  <div class="toolbar"><button id="previewAutoChart">▶ 생성 채보 플레이</button><button id="editAutoChart">에디터에서 다듬기</button><button id="saveAutoChart">JSON으로 저장</button></div><p class="help" id="autoStatus">음악 파일은 선택 사항입니다. 파일이 없으면 설정한 길이(기본 90초)까지 박자 기반 채보를 생성합니다.</p>
+ </div>
+</section>
