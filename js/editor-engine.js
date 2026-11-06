@@ -21,6 +21,7 @@
     return clamp(Math.max(1, Number.isFinite(saved)&&saved>0?saved:90, last+beatStep()*4),1,600);
   };
   const pxPerSecond = () => 80 * speed();
+  window.adoaEditorPixelsPerSecond = pxPerSecond();
   const receptorY = () => viewportHeight * .80;
   const worldHeight = () => Math.max(viewportHeight, duration()*pxPerSecond()+receptorY());
   let laneLayer = $('guides');
@@ -45,6 +46,8 @@
   style.id='rhythmForgeEditorSubsystemStyle';
   style.textContent=`
     #editor #timeline{position:relative!important;height:${viewportHeight}px!important;max-height:${viewportHeight}px!important;overflow:hidden!important;cursor:default}
+    #editor .timeline-wrap{position:relative!important;padding-right:30px!important;box-sizing:border-box}
+    #editor #adoaTimelineScroll{position:absolute;right:5px;top:18px;height:${viewportHeight-4}px;width:16px;writing-mode:vertical-lr;direction:ltr;accent-color:#43d9c4;cursor:ns-resize;z-index:8}
     #editor #guides,#editor #notes,#editor #adoaBeatGrid{position:absolute!important;left:0!important;right:0!important;top:0!important;bottom:auto!important;width:100%!important;will-change:transform;}
     #editor #guides{z-index:1!important;pointer-events:none!important;overflow:hidden!important}
     #editor #guides .lane-divider{position:absolute;top:0;bottom:0;width:1px;background:#263247;pointer-events:none}
@@ -86,24 +89,54 @@
   function updateViewport(time){
     const d=duration(),scale=pxPerSecond(),h=worldHeight(),t=clamp(Number(time)||0,0,d);
     const scroll=(d-t)*scale;
+    window.adoaEditorScrollOffset=scroll;
+    window.adoaEditorPixelsPerSecond=scale;
+    if(Math.abs(scroll-lastVirtualRenderScroll)>180&&!virtualRenderQueued){virtualRenderQueued=true;requestAnimationFrame(()=>{virtualRenderQueued=false;renderNotes();});}
     timeline.style.height=viewportHeight+'px';timeline.style.maxHeight=viewportHeight+'px';
     [laneLayer,grid,noteLayer].forEach(el=>{el.style.height=h+'px';el.style.transform=`translateY(${-scroll}px)`;});
     if($('seek')){ $('seek').max=String(d); if(document.activeElement!==$('seek'))$('seek').value=String(t); }
     if($('now'))$('now').textContent=t.toFixed(3)+'s';
+    const sb=$('adoaTimelineScroll');if(sb){sb.max=String(d);if(document.activeElement!==sb)sb.value=String(t);}
     window.adoaEditorScrollOffset=scroll;
   }
+  // Independent vertical chart navigation: wheel + a slim scrollbar, synchronized with the seek position.
+  const timelineWrap=timeline.closest('.timeline-wrap');
+  let scrollBar=$('adoaTimelineScroll');
+  if(!scrollBar&&timelineWrap){
+    scrollBar=document.createElement('input');scrollBar.id='adoaTimelineScroll';scrollBar.type='range';scrollBar.min='0';scrollBar.max='90';scrollBar.step='0.01';scrollBar.value='0';scrollBar.setAttribute('aria-label','채보 화면 세로 스크롤');scrollBar.title='채보 화면 스크롤';timelineWrap.appendChild(scrollBar);
+  }
+  if(scrollBar){
+    scrollBar.addEventListener('input',()=>{const t=clamp(Number(scrollBar.value)||0,0,duration());if($('seek')){$('seek').value=String(t);$('seek').dispatchEvent(new Event('input',{bubbles:true}));}else updateViewport(t);});
+  }
+  timeline.addEventListener('wheel',e=>{
+    if(!duration())return;e.preventDefault();
+    const current=Number($('seek')?.value)||0;
+    const delta=(e.deltaY||0)/Math.max(1,pxPerSecond())*1.5;
+    const next=clamp(current+delta,0,duration());
+    if($('seek')){$('seek').value=String(next);$('seek').dispatchEvent(new Event('input',{bubbles:true}));}
+    else updateViewport(next);
+  },{passive:false});
+  // Route deletion and history through compact single-note operations instead of cloning the whole chart.
+  if($('deleteNote'))$('deleteNote').onclick=()=>api.deleteSelectedFast();
+  if($('undo'))$('undo').onclick=()=>api.undoAction();
+  if($('redo'))$('redo').onclick=()=>api.redoAction();
+
   const renderedGeometry = new Map();
+  let lastVirtualRenderScroll = -Infinity, virtualRenderQueued = false;
   function renderNotes(){
-    // The core renderer maintains keyed note elements; this pass updates only notes whose geometry changed.
+    // The core renderer now creates only visible/nearby note elements; this pass positions that small set.
     const original=window.__rhythmForgeOriginalRenderNotes;
     if(typeof original==='function')original();
     const notes=api.getNotes(),h=worldHeight(),scale=pxPerSecond(),count=laneCount(),dur=duration();
+    const scroll=Number(window.adoaEditorScrollOffset)||0, top=scroll-260, bottom=scroll+viewportHeight+260;
     noteLayer.style.height=h+'px';noteLayer.style.width='100%';noteLayer.style.display='block';
     const live=new Set();
     for(const n of notes){
+      const t=clamp(Number(n.time)||0,0,dur),y=h-t*scale;
+      if(y<top||y>bottom)continue;
       const id=String(n.id??'');live.add(id);
       const el=window.getNoteElementById?.(id);if(!el)continue;
-      const t=clamp(Number(n.time)||0,0,dur),lane=clamp(Number(n.lane)||0,0,count-1),y=h-t*scale;
+      const lane=clamp(Number(n.lane)||0,0,count-1);
       const signature=`${t}|${lane}|${h}|${scale}|${count}`;
       if(renderedGeometry.get(id)!==signature){
         Object.assign(el.style,{left:((lane+.5)/count*100)+'%',top:y+'px',bottom:'auto',width:`min(38px, calc(100% / ${count} - 6px))`,height:`min(38px, calc(100% / ${count} - 6px))`,zIndex:String(100+Math.round(y)),display:'block',visibility:'visible',opacity:'1'});
@@ -111,6 +144,7 @@
       }
     }
     for(const id of renderedGeometry.keys())if(!live.has(id))renderedGeometry.delete(id);
+    lastVirtualRenderScroll=scroll;
     updateViewport(Number($('seek')?.value)||0);
   }
   // Capture the original renderer exactly once. All future calls use the one stable wrapper.

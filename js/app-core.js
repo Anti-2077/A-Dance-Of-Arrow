@@ -48,14 +48,22 @@ function addNote(n){n.id=n.id??(Date.now()+Math.random());notes.push(n);setSelec
 // Expose note creation for the editor's dynamically generated beat-grid click handler.
 window.addNote=addNote; window.renderNotes=renderNotes; window.getEditorNotes=()=>notes; window.getNoteElementById=id=>noteElementsById.get(String(id))||null;
 function renderNotes(){
+  // Virtualized note layer: keep chart data complete, but create DOM nodes only near the viewport.
   const lanes=editorLaneCount();noteLayer.style.display='grid';
   const liveIds=new Set();
+  const worldH=Number(window.adoaWorldHeight?.())||Number(noteLayer.style.height.replace('px',''))||560;
+  const scroll=Number(window.adoaEditorScrollOffset)||0;
+  const scale=Number(window.adoaEditorPixelsPerSecond)||80;
+  const viewTop=scroll-260, viewBottom=scroll+560+260;
   for(const n of notes){
-    const id=String(n.id);liveIds.add(id);n.pos=positionFromTime(n.time);
+    const t=Math.max(0,Number(n.time)||0);
+    const y=worldH-t*scale;
+    if(y<viewTop||y>viewBottom)continue;
+    const id=String(n.id);liveIds.add(id);
     let el=noteElementsById.get(id);
     if(!el){el=document.createElement('button');el.type='button';el.className='note';el.dataset.noteId=id;el.textContent='';el.onclick=e=>{e.stopPropagation();setSelectedNote(n.id)};noteElementsById.set(id,el);noteLayer.appendChild(el)}
     el.classList.toggle('selected',n.id===selected);
-    el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;
+    el.title=`${(t*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;
   }
   for(const [id,el] of noteElementsById){if(!liveIds.has(id)){el.remove();noteElementsById.delete(id);if(el===selectedNoteElement)selectedNoteElement=null}}
   selectedNoteElement=selected==null?null:noteElementsById.get(String(selected))||null;
@@ -1096,7 +1104,40 @@ selectGameChart=function(c){
 // Stable public bridge for the single editor subsystem. Keep mutable state inside this IIFE.
 window.ADOAEditorAPI = {
   getNotes: () => notes,
+  getSelectedNote: () => currentNote(),
   addNote: (note) => { if(!note || !Number.isFinite(Number(note.time))) return; addNote({...note, speed:Number(note.speed)||Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1))}); setProjectDirty?.(); },
+  deleteSelectedFast: () => {
+    if(selected===null)return false;
+    const index=notes.findIndex(n=>n.id===selected);if(index<0)return false;
+    const note={...notes[index]};
+    undoStack.push({__adoaOp:'deleteNote',note,index});if(undoStack.length>50)undoStack.shift();redoStack=[];
+    notes.splice(index,1);setSelectedNote(null);if(typeof window.renderNotes==='function')window.renderNotes();else renderNotes();setProjectDirty?.();persistEditorAutosave();updateUndoRedoButtons();return true;
+  },
+  undoAction: () => {
+    if(!undoStack.length){toast('실행 취소할 작업이 없습니다.');return false;}
+    const item=undoStack.pop();
+    if(item?.__adoaOp==='deleteNote'){
+      notes.splice(Math.max(0,Math.min(notes.length,item.index)),0,{...item.note});
+      redoStack.push({__adoaOp:'restoreDeletedNote',note:{...item.note},index:item.index});
+      setSelectedNote(null);if(typeof window.renderNotes==='function')window.renderNotes();else renderNotes();
+    }else{
+      redoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});
+      const d=typeof item==='string'?JSON.parse(item):item;notes=d.notes;events=d.events;effects=d.effects;setSelectedNote(null);if(typeof window.renderNotes==='function')window.renderNotes();else renderNotes();renderEvents();renderEffects();
+    }
+    setProjectDirty?.();persistEditorAutosave();updateUndoRedoButtons();return true;
+  },
+  redoAction: () => {
+    if(!redoStack.length){toast('다시 실행할 작업이 없습니다.');return false;}
+    const item=redoStack.pop();
+    if(item?.__adoaOp==='restoreDeletedNote'){
+      const index=notes.findIndex(n=>n.id===item.note.id);if(index>=0)notes.splice(index,1);
+      undoStack.push({__adoaOp:'deleteNote',note:{...item.note},index:item.index});setSelectedNote(null);if(typeof window.renderNotes==='function')window.renderNotes();else renderNotes();
+    }else{
+      undoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});
+      const d=typeof item==='string'?JSON.parse(item):item;notes=d.notes;events=d.events;effects=d.effects;setSelectedNote(null);if(typeof window.renderNotes==='function')window.renderNotes();else renderNotes();renderEvents();renderEffects();
+    }
+    setProjectDirty?.();persistEditorAutosave();updateUndoRedoButtons();return true;
+  },
   pushUndo: () => pushUndo(),
   markDirty: () => setProjectDirty(),
   renderNotes: () => renderNotes(),
