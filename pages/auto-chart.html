@@ -2,7 +2,7 @@
 <section id="autochart" class="screen">
  <div class="heading"><div><div class="eyebrow">AUTO CHART STUDIO</div><h2>AI 자동 채보 생성</h2></div><button class="back">← 메인으로</button></div>
  <div class="panel">
-  <p class="muted">사용자가 입력한 BPM을 기준으로 음악의 타격음과 리듬을 분석합니다. 분석한 리듬을 채보로 변환하며, BPM은 AI가 임의로 변경하지 않습니다.</p>
+  <p class="muted">사용자가 입력한 BPM을 기준으로 음악을 분석합니다. 트럼펫 같은 지속형 멜로디는 제외하고 짧은 타격음과 작은 연속 타격까지 감지합니다. 큰 타격일수록 동시 입력을 늘리고, 채보는 좌우 한쪽에 더 많이 배치합니다.</p>
   <div class="toolbar"><label class="filebutton">♪ 음악 파일 선택<input id="autoAudioFile" type="file" accept="audio/*"></label><span id="autoAudioName" class="muted">음악 파일 선택 안 됨</span></div>
   <div class="toolbar">
    <label>BPM <input id="autoBpm" type="number" min="30" max="400" value="180"></label>

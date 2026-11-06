@@ -76,7 +76,7 @@
     const outLength=Math.floor(sourceLength*targetRate/sourceRate);
     const mono=new Float32Array(outLength);
     const channelData=Array.from({length:channels},(_,i)=>audioBuffer.getChannelData(i));
-    // Linear resampling and mono mixdown.
+    // Linear resampling and mono mixdown. Keep analysis local to the browser.
     for(let i=0;i<outLength;i++){
       const src=i*sourceRate/targetRate,lo=Math.floor(src),frac=src-lo;
       let sample=0;
@@ -91,50 +91,80 @@
     const real=new Float64Array(size),imag=new Float64Array(size),previous=new Float32Array(half);
     const frames=Math.max(1,Math.floor((mono.length-size)/hop)+1);
     const flux=new Float32Array(frames),low=new Float32Array(frames),mid=new Float32Array(frames),high=new Float32Array(frames);
+    const energy=new Float32Array(frames),flatness=new Float32Array(frames);
     for(let frame=0;frame<frames;frame++){
       const start=frame*hop;real.fill(0);imag.fill(0);
       for(let i=0;i<size;i++)real[i]=(mono[start+i]||0)*window[i];
       fft(real,imag);
-      let sumFlux=0,l=0,m=0,h=0;
+      let sumFlux=0,l=0,m=0,h=0,sumMag=0,sumLog=0,binCount=0;
       for(let k=1;k<half;k++){
-        const mag=Math.hypot(real[k],imag[k]);
+        const mag=Math.hypot(real[k],imag[k])+1e-12;
         const hz=k*targetRate/size;
         if(mag>previous[k-1])sumFlux+=mag-previous[k-1];
         if(hz>=35&&hz<160)l+=mag;
         else if(hz>=160&&hz<2500)m+=mag;
         else if(hz>=2500&&hz<10000)h+=mag;
+        sumMag+=mag;sumLog+=Math.log(mag);binCount++;
         previous[k-1]=mag;
       }
       flux[frame]=sumFlux;low[frame]=l;mid[frame]=m;high[frame]=h;
+      energy[frame]=sumMag;
+      flatness[frame]=Math.exp(sumLog/Math.max(1,binCount))/(sumMag/Math.max(1,binCount));
       if(frame%500===0)onProgress?.(Math.round(frame/frames*75));
     }
-    // Smooth the spectral-flux curve and keep clear local peaks.
+    // A short median smoother preserves individual rattles better than a wide average.
     const smooth=new Float32Array(frames);
-    for(let i=0;i<frames;i++)smooth[i]=((flux[i]||0)+(flux[i-1]||0)+(flux[i+1]||0))/3;
-    const positive=Array.from(smooth).filter(v=>v>0),mean=positive.reduce((a,b)=>a+b,0)/Math.max(1,positive.length);
-    const variance=positive.reduce((a,b)=>a+(b-mean)**2,0)/Math.max(1,positive.length),globalThreshold=mean+Math.sqrt(variance)*.30;
-    const peaks=[];let lastFrame=-99;
-    for(let i=2;i<frames-2;i++){
+    for(let i=0;i<frames;i++){
+      const a=flux[Math.max(0,i-1)],b=flux[i],c=flux[Math.min(frames-1,i+1)];
+      smooth[i]=Math.min(Math.max(a,b),Math.max(Math.min(a,b),Math.min(Math.max(a,b),c)));
+    }
+    const positive=Array.from(smooth).filter(v=>v>0);
+    const globalFloor=percentile(positive,.24)*.42;
+    const candidates=[];
+    // 2 frames ~= 40 ms. This deliberately allows fast rolls and small repeated hits.
+    for(let i=2;i<frames-3;i++){
       const value=smooth[i];
-      if(value<globalThreshold||value<smooth[i-1]||value<smooth[i+1]||i-lastFrame<5)continue;
-      let local=0,count=0;
-      for(let j=Math.max(0,i-20);j<=Math.min(frames-1,i+20);j++){local+=smooth[j];count++;}
-      if(value<local/Math.max(1,count)*1.18)continue;
-      const bands=[low[i],mid[i],high[i]],maxBand=Math.max(...bands,1e-9);
-      peaks.push({time:i*hop/targetRate,strength:value,bands:bands.map(v=>v/maxBand)});
-      lastFrame=i;
+      if(value<=globalFloor||value<smooth[i-1]||value<smooth[i+1])continue;
+      const local=[];
+      for(let j=Math.max(0,i-10);j<=Math.min(frames-1,i+10);j++)if(j!==i)local.push(smooth[j]);
+      const localMedian=percentile(local,.5);
+      const localHigh=percentile(local,.8);
+      if(value<Math.max(globalFloor,localMedian*1.10,localHigh*.72))continue;
+      // Sustained, highly tonal energy (e.g. a held trumpet note) is not a stream
+      // of hits. Keep attacks only when the energy decays or has a transient spectrum.
+      const futureEnergy=(energy[i+1]+energy[i+2]+energy[i+3])/3;
+      const sustainRatio=futureEnergy/Math.max(1e-9,energy[i]);
+      const tonalSustain=flatness[i]<.018&&sustainRatio>.78;
+      if(tonalSustain)continue;
+      const bands=[low[i],mid[i],high[i]],sum=bands.reduce((a,b)=>a+b,0)||1;
+      candidates.push({frame:i,time:i*hop/targetRate,strength:value,bands:bands.map(v=>v/sum),flatness:flatness[i],transientness:1-clamp(sustainRatio,0,1)});
     }
-    // If strict peak picking found too little, use a lower threshold as a fallback.
+    // Resolve only near-identical peaks; do not suppress fast repeated percussion.
+    const peaks=[];
+    for(const candidate of candidates){
+      const last=peaks[peaks.length-1];
+      if(last&&candidate.frame-last.frame<2){if(candidate.strength>last.strength)peaks[peaks.length-1]=candidate;}
+      else peaks.push(candidate);
+    }
+    // Adaptive fallback for very quiet recordings. It still requires a local transient peak.
     if(peaks.length<4){
-      lastFrame=-99;
-      const threshold=percentile(Array.from(smooth),.78);
-      for(let i=2;i<frames-2;i++)if(smooth[i]>=threshold&&smooth[i]>=smooth[i-1]&&smooth[i]>smooth[i+1]&&i-lastFrame>=5){
-        const bands=[low[i],mid[i],high[i]],maxBand=Math.max(...bands,1e-9);
-        peaks.push({time:i*hop/targetRate,strength:smooth[i],bands:bands.map(v=>v/maxBand)});lastFrame=i;
+      const floor=percentile(Array.from(smooth),.55)*.62;
+      for(let i=2;i<frames-3;i++){
+        if(smooth[i]<floor||smooth[i]<smooth[i-1]||smooth[i]<smooth[i+1])continue;
+        if(peaks.some(p=>Math.abs(p.frame-i)<2))continue;
+        const future=(energy[i+1]+energy[i+2]+energy[i+3])/3;
+        const sustain=future/Math.max(1e-9,energy[i]);
+        if(flatness[i]<.018&&sustain>.78)continue;
+        const bands=[low[i],mid[i],high[i]],sum=bands.reduce((a,b)=>a+b,0)||1;
+        peaks.push({frame:i,time:i*hop/targetRate,strength:smooth[i],bands:bands.map(v=>v/sum),flatness:flatness[i],transientness:1-clamp(sustain,0,1)});
       }
+      peaks.sort((a,b)=>a.frame-b.frame);
     }
-    const maxStrength=peaks.reduce((m,p)=>Math.max(m,p.strength),1e-9);
-    peaks.forEach(p=>p.normalized=clamp(p.strength/maxStrength,0,1));
+    const reference=Math.max(1e-9,percentile(peaks.map(p=>p.strength),.90));
+    peaks.forEach(p=>{
+      p.normalized=clamp(p.strength/reference,0,1.65);
+      p.loudness=p.normalized;
+    });
     return {peaks,duration:audioBuffer.duration};
   }
 
@@ -209,9 +239,13 @@
   function centerLaneOrder(lanes){
     return Array.from({length:lanes},(_,i)=>i).sort((a,b)=>Math.abs(a-(lanes-1)/2)-Math.abs(b-(lanes-1)/2)||a-b);
   }
+  function stableHash(value){let h=2166136261;for(let i=0;i<value.length;i++){h^=value.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
   function buildChart(result,settings){
     const beat=60/settings.bpm,step=beat/8,lanes=settings.lanes,maxChord=Math.max(1,Math.floor(lanes/2));
-    const thresholds={1:.78,2:.53,3:.34,4:.20};
+    // The detector returns transient attacks rather than sustained audio frames.
+    // Keep a low floor in every difficulty so quiet rattles remain representable;
+    // difficulty primarily controls rhythmic resolution and density.
+    const thresholds={1:.58,2:.34,3:.18,4:.07};
     const difficultyTick={1:8,2:4,3:2,4:1}[settings.difficulty];
     const selectedResolutionTick=8/settings.subdivision;
     const minimumTick=Math.max(difficultyTick,selectedResolutionTick);
@@ -223,49 +257,78 @@
       const relative=onset.time-result.phaseSeconds;
       const tick=Math.round(relative/step);
       const shiftedTick=tick+(result.timeShiftTicks||0);
-      if(shiftedTick<0)continue;
-      const gridTime=shiftedTick*step;
-      const residual=Math.abs(relative-tick*step);
-      if(residual>step*.46)continue;
-      if(tick%minimumTick!==0)continue;
+      if(shiftedTick<0||tick%minimumTick!==0)continue;
       if(settings.difficulty===1){const inBar=((tick%barTicks)+barTicks)%barTicks;if(inBar!==0)continue;}
       if(onset.normalized<strengthThreshold)continue;
-      const old=grouped.get(tick);
-      if(!old||old.normalized<onset.normalized)grouped.set(tick,{tick,time:gridTime,normalized:onset.normalized,bands:onset.bands});
+      const gridTime=shiftedTick*step;
+      const old=grouped.get(shiftedTick);
+      if(!old)grouped.set(shiftedTick,{tick:shiftedTick,time:gridTime,normalized:onset.normalized,bands:onset.bands,hitCount:1,transientness:onset.transientness||0});
+      else{
+        old.hitCount++;
+        old.normalized=Math.max(old.normalized,onset.normalized);
+        old.transientness=Math.max(old.transientness,onset.transientness||0);
+        old.bands=old.bands.map((v,i)=>Math.max(v,onset.bands[i]||0));
+      }
     }
     const events=Array.from(grouped.values()).sort((a,b)=>a.tick-b.tick);
-    const centerOrder=centerLaneOrder(lanes),notes=[];let rapidRun=0,previousTime=-Infinity,previousLane=-1;
+    const notes=[];
+    const half=Math.max(1,Math.floor(lanes/2));
+    const centerLeft=half-1,centerRight=half;
+    const dominantSide=stableHash(`${settings.seed||''}|${result.duration}|${settings.bpm}`)%2===0?'left':'right';
+    const leftLanes=Array.from({length:half},(_,i)=>i);
+    const rightLanes=Array.from({length:lanes-half},(_,i)=>half+i);
+    const sideLanes=side=>side==='left'?leftLanes:rightLanes;
+    const sideCenterOrder=side=>side==='left'
+      ?leftLanes.slice().sort((a,b)=>Math.abs(a-centerLeft)-Math.abs(b-centerLeft))
+      :rightLanes.slice().sort((a,b)=>Math.abs(a-centerRight)-Math.abs(b-centerRight));
+    let rapidRun=0,previousTime=-Infinity,previousLane=-1;
     const difficultyName=['','Easy','Normal','Hard','Expert'][settings.difficulty];
     for(let i=0;i<events.length;i++){
       const event=events[i],gap=event.time-previousTime;
       const rapid=gap<=beat*.72;
       if(rapid)rapidRun++;else rapidRun=0;
+      // Keep roughly 75% of events on one dominant half of the playfield.
+      // A deterministic minority of events crosses the center to avoid monotony.
+      const sideRoll=stableHash(`${event.tick}|${i}|${settings.bpm}`)%10;
+      const side=sideRoll<7?dominantSide:(dominantSide==='left'?'right':'left');
+      const preferred=sideCenterOrder(side);
       let baseLane;
       if(rapid){
-        baseLane=centerOrder[rapidRun%Math.min(centerOrder.length,Math.max(2,Math.ceil(lanes/2)))];
+        const rapidPool=preferred.slice(0,Math.min(preferred.length,2));
+        baseLane=rapidPool[rapidRun%rapidPool.length];
       }else{
+        const pool=sideLanes(side);
         const bar=Math.floor(event.time/(beat*settings.meter));
-        baseLane=centerOrder[(i+bar*2)%centerOrder.length];
+        baseLane=pool[(i+bar)%pool.length];
       }
-      if(baseLane===previousLane&&centerOrder.length>1)baseLane=centerOrder[(centerOrder.indexOf(baseLane)+1)%centerOrder.length];
-      const activeBands=event.bands.filter(v=>v>=.58).length;
+      if(baseLane===previousLane&&preferred.length>1&&rapid){
+        baseLane=preferred[(preferred.indexOf(baseLane)+1)%preferred.length];
+      }
+      // Louder attacks create more simultaneous notes, capped at half the key count.
+      const loudness=event.normalized;
       let chord=1;
-      if(settings.difficulty>=2&&event.normalized>=.72&&activeBands>=2)chord=Math.min(maxChord,activeBands);
+      if(settings.difficulty>=2){
+        if(loudness>=1.42)chord=maxChord;
+        else if(loudness>=1.18)chord=Math.min(3,maxChord);
+        else if(loudness>=.94)chord=Math.min(2,maxChord);
+      }
       if(settings.difficulty===1)chord=1;
       if(settings.difficulty===2)chord=Math.min(chord,2);
+      chord=Math.min(chord,maxChord);
+      const lanePool=sideLanes(side);
       const laneSet=[];
+      const startIndex=Math.max(0,lanePool.indexOf(baseLane));
       for(let c=0;c<chord;c++){
-        let lane=centerOrder[(centerOrder.indexOf(baseLane)+c)%centerOrder.length];
-        if(laneSet.includes(lane))lane=centerOrder.find(x=>!laneSet.includes(x));
-        if(Number.isInteger(lane))laneSet.push(lane);
+        const lane=lanePool[(startIndex+c)%lanePool.length];
+        if(!laneSet.includes(lane))laneSet.push(lane);
       }
-      for(const lane of laneSet.slice(0,maxChord)){
+      for(const lane of laneSet){
         notes.push({time:Number(event.time.toFixed(5)),lane,pos:Math.min(1,event.time/Math.max(1,result.duration)),id:`ai-${i}-${lane}`});
       }
       previousTime=event.time;previousLane=baseLane;
     }
     notes.sort((a,b)=>a.time-b.time||a.lane-b.lane);
-    return {notes,events:events.length,difficultyName,step,threshold:strengthThreshold,maxChord};
+    return {notes,events:events.length,difficultyName,step,threshold:strengthThreshold,maxChord,dominantSide};
   }
 
   async function generateChart(){
@@ -275,6 +338,7 @@
     let result=analysis;
     if(!result||analysisKey!==fileKey(selectedFile,settings.bpm,settings.meter))result=await analyzeSelectedFile();
     if(!result)return;
+    settings.seed=selectedFile?.name||$id('autoTitle')?.value||'adoa';
     const generated=buildChart(result,settings);
     if(!generated.notes.length){status('분석은 완료됐지만 선택한 난이도에서 채보로 사용할 타격음을 찾지 못했습니다. 난이도를 높이거나 BPM/박자를 확인해 주세요.');notify('생성할 수 있는 노트가 부족합니다.');return;}
     const manualBase=Number(bridge()?.getOffset()||0)-Number(result.phaseMs);
@@ -284,7 +348,7 @@
       notes:generated.notes,events:[],effects:[],images:[],duration:result.duration,
       title:$id('autoTitle').value.trim()||'AI 자동 생성 채보',artist:$id('autoArtist').value.trim()||'Unknown',difficulty:generated.difficultyName,
       aiAnalysis:{engine:'ADOA-local-rhythm-analysis-v1',onsetCount:result.onsets.length,usedOnsets:generated.events,
-        maxSubdivision:32,difficultyScale:10,maxSimultaneousKeys:generated.maxChord,selectedMaxSubdivision:settings.subdivision*4,laneStrategy:'center-biased-rapid-patterns',
+        maxSubdivision:32,difficultyScale:10,maxSimultaneousKeys:generated.maxChord,selectedMaxSubdivision:settings.subdivision*4,dominantSide:generated.dominantSide,dominantSideTargetRatio:.70,laneStrategy:'dominant-half-biased-with-central-rapid-runs',transientPolicy:'include-short-transients-exclude-sustained-tonal-energy',chordPolicy:'louder-onsets-create-larger-chords',
         rhythmDensity:generated.events/Math.max(.01,result.duration/60)}
     };
     bridge()?.setChart(generatedChart);
@@ -330,5 +394,5 @@
     };
   }
   bind();
-  window.ADOAAutoChartAI={analyze:analyzeSelectedFile,generate:generateChart,getAnalysis:()=>analysis,getSettings:currentSettings,getChart:()=>generatedChart};
+  window.ADOAAutoChartAI={analyze:analyzeSelectedFile,generate:generateChart,getAnalysis:()=>analysis,getSettings:currentSettings,getChart:()=>generatedChart,diagnostics:{centerLaneOrder,buildChart,detectOnsets}};
 })();
