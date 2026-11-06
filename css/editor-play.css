@@ -1,0 +1,2 @@
+/* Editor preview reuses the exact gameplay stage and note renderer to keep timing consistent. */
+#game.adoa-editor-play .adoa-return-editor { display: inline-flex !important; }
