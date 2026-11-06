@@ -5,6 +5,7 @@
   <label class="filebutton">♪ 곡 불러오기<input id="audioFile" type="file" accept="audio/*"></label><button id="playAudio">▶ 재생</button><button id="pauseAudio">Ⅱ 일시정지</button><button id="stopAudio">■ 처음으로</button>
   <label>BPM <input id="bpm" type="number" min="1" max="999" value="180"></label>
   <label>분할 <select id="subdivision"><option value="1">1/4</option><option value="2">1/8</option><option value="4">1/16</option><option value="8">1/32</option><option value="16">1/64</option></select></label>
+  <label>곡 난이도 <input id="chartDifficulty" type="number" min="1" max="20" step="1" value="1" style="width:64px"> Lv.</label>
   <label>레인 수 <select id="keyCount"><option value="8" selected>8레인</option><option value="6">6레인</option><option value="4">4레인</option></select></label>
   <button id="saveProject" class="primary">프로젝트 저장</button><button id="saveChart">채보 JSON 내보내기</button>
  </div>

@@ -111,7 +111,7 @@
   timeline.addEventListener('wheel',e=>{
     if(!duration())return;e.preventDefault();
     const current=Number($('seek')?.value)||0;
-    const delta=(e.deltaY||0)/Math.max(1,pxPerSecond())*1.5;
+    const delta=-(e.deltaY||0)/Math.max(1,pxPerSecond())*1.5;
     const next=clamp(current+delta,0,duration());
     if($('seek')){$('seek').value=String(next);$('seek').dispatchEvent(new Event('input',{bubbles:true}));}
     else updateViewport(next);

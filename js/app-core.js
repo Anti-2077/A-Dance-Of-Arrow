@@ -1169,4 +1169,50 @@ window.ADOAAutoChartBridge = {
   edit: chart => { if(!chart)return; loadChartIntoEditor(chart); showOriginal('editor'); requestAnimationFrame(()=>{buildGuides();renderNotes();}); }
 };
 
+
+// Final editor additions: numeric difficulty persistence and offset-aware editor-play seeking.
+const adoDifficultyField=document.getElementById('chartDifficulty');
+const adoReadDifficulty=()=>Math.max(1,Math.min(20,Math.round(Number(adoDifficultyField?.value)||1)));
+if(adoDifficultyField){
+  adoDifficultyField.addEventListener('input',()=>{adoDifficultyField.value=String(adoReadDifficulty());setProjectDirty?.();});
+  adoDifficultyField.addEventListener('change',()=>{adoDifficultyField.value=String(adoReadDifficulty());});
+}
+const adoBaseChartSnapshot=chartSnapshot;
+chartSnapshot=function(){const d=adoBaseChartSnapshot.apply(this,arguments)||{};const ms=Number(adoDifficultyField?document.getElementById('editorOffsetMs')?.value:d.offset);const safe=Number.isFinite(ms)?ms:(Number(d.offset)||0);d.offset=safe;d.editorOffsetMs=safe;d.difficulty=adoReadDifficulty();d.settings={...(d.settings||{}),editorOffsetMs:safe,difficulty:adoReadDifficulty()};return d;};
+const adoBaseRestoreSnapshot=restoreSnapshot;
+restoreSnapshot=function(raw){const d=typeof raw==='string'?JSON.parse(raw):raw;const r=adoBaseRestoreSnapshot.apply(this,arguments);const level=Number(d?.difficulty??d?.settings?.difficulty);if(adoDifficultyField&&Number.isFinite(level))adoDifficultyField.value=String(Math.max(1,Math.min(20,Math.round(level))));const ms=Number(d?.editorOffsetMs??d?.settings?.editorOffsetMs??d?.offset);if(Number.isFinite(ms)&&document.getElementById('editorOffsetMs'))document.getElementById('editorOffsetMs').value=String(ms);return r;};
+const adoBaseLoadChartIntoEditor=loadChartIntoEditor;
+loadChartIntoEditor=function(d){const r=adoBaseLoadChartIntoEditor.apply(this,arguments);const level=Number(d?.difficulty??d?.settings?.difficulty);if(adoDifficultyField&&Number.isFinite(level))adoDifficultyField.value=String(Math.max(1,Math.min(20,Math.round(level))));const ms=Number(d?.editorOffsetMs??d?.settings?.editorOffsetMs??d?.offset);if(Number.isFinite(ms)&&document.getElementById('editorOffsetMs'))document.getElementById('editorOffsetMs').value=String(ms);return r;};
+const adoBaseBeginNewProject=beginNewProject;
+beginNewProject=function(){const r=adoBaseBeginNewProject.apply(this,arguments);if(adoDifficultyField)adoDifficultyField.value='1';return r;};
+
+// A seek-bar value is the chart's visible time. Convert it to the raw playback clock
+// by adding the chart offset; adoTickGame subtracts that offset exactly once.
+const adoSeekWithOffset=document.getElementById('gameSeek');
+if(adoSeekWithOffset){
+  adoSeekWithOffset.oninput=e=>{
+    const chartTime=Math.max(0,Number(e.target.value)||0);
+    const offsetMs=Number(gameChart?.offset??gameChart?.editorOffsetMs??gameChart?.settings?.editorOffsetMs??0)||0;
+    const rawTime=chartTime+offsetMs/1000;
+    gameElapsed=rawTime;gameStartAt=performance.now();gameHit=new Set();gameMissed=new Set();gameScore=0;gameMiss=0;
+    adoResetHUD();adoPrepareGameNotes();
+    if(gameAudio){try{gameAudio.currentTime=Math.max(0,Math.min(rawTime,Number.isFinite(gameAudio.duration)?gameAudio.duration:Math.max(0,rawTime)));}catch{}}
+    if(!gameRunning&&gameChart){gameRunning=true;document.getElementById('gameOverlay')?.classList.add('hidden');}
+    if(gameRunning){if(gameAudio)gameAudio.play().catch(()=>{});cancelAnimationFrame(gameRAF);gameRAF=requestAnimationFrame(adoTickGame);}
+  };
+}
+const adoBaseDurationWithOffset=adoDurationForChart;
+adoDurationForChart=function(){const ms=Number(gameChart?.offset??gameChart?.editorOffsetMs??gameChart?.settings?.editorOffsetMs??0)||0;return Math.max(1,adoBaseDurationWithOffset()+ms/1000);};
+const adoBaseTickWithOffset=adoTickGame;
+adoTickGame=function(){
+  adoBaseTickWithOffset.apply(this,arguments);
+  if(!gameChart)return;
+  const raw=gameElapsed+(performance.now()-gameStartAt)/1000;
+  const offsetMs=Number(gameChart.offset??gameChart.editorOffsetMs??gameChart.settings?.editorOffsetMs??0)||0;
+  const chartTime=Math.max(0,raw-offsetMs/1000);
+  const seek=document.getElementById('gameSeek');if(seek&&!seek.matches(':active'))seek.value=String(chartTime);
+  const clock=document.getElementById('gameClock');if(clock)clock.textContent=chartTime.toFixed(3)+'s';
+};
+tickGame=adoTickGame;
+
 })();

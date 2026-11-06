@@ -10,7 +10,7 @@
   const scripts = [
     'app-core.js', 'auto-chart-ai.js', 'local-chart-library.js', 'editor-engine.js',
     'editor-controls.js', 'offset-visual-events.js', 'editor-stability.js',
-    'editor-seek-offset.js', 'offset-persistence-v9.js', 'offset-persistence-v10.js'
+    'editor-seek-offset.js', 'offset-persistence-v9.js', 'offset-persistence-v10.js', 'editor-final-customizations.js'
   ];
   try {
     const fragments = await Promise.all(pages.map(async name => {
