@@ -92,20 +92,25 @@
     if($('now'))$('now').textContent=t.toFixed(3)+'s';
     window.adoaEditorScrollOffset=scroll;
   }
+  const renderedGeometry = new Map();
   function renderNotes(){
-    // Original renderer owns selected-note state and note DOM creation; this pass only applies geometry.
+    // The core renderer maintains keyed note elements; this pass updates only notes whose geometry changed.
     const original=window.__rhythmForgeOriginalRenderNotes;
     if(typeof original==='function')original();
-    const notes=api.getNotes(),h=worldHeight(),scale=pxPerSecond(),count=laneCount();
+    const notes=api.getNotes(),h=worldHeight(),scale=pxPerSecond(),count=laneCount(),dur=duration();
     noteLayer.style.height=h+'px';noteLayer.style.width='100%';noteLayer.style.display='block';
-    const elements=Array.from(noteLayer.querySelectorAll('.note'));
-    elements.forEach((el,i)=>{
-      const n=notes[i];if(!n)return;
-      const t=clamp(Number(n.time)||0,0,duration()),lane=clamp(Number(n.lane)||0,0,count-1);
-      const y=h-t*scale;
-      Object.assign(el.style,{left:((lane+.5)/count*100)+'%',top:y+'px',bottom:'auto',width:`min(38px, calc(100% / ${count} - 6px))`,height:`min(38px, calc(100% / ${count} - 6px))`,zIndex:String(100+Math.round(y)),display:'block',visibility:'visible',opacity:'1'});
-      el.dataset.noteId=String(n.id??'');
-    });
+    const live=new Set();
+    for(const n of notes){
+      const id=String(n.id??'');live.add(id);
+      const el=window.getNoteElementById?.(id);if(!el)continue;
+      const t=clamp(Number(n.time)||0,0,dur),lane=clamp(Number(n.lane)||0,0,count-1),y=h-t*scale;
+      const signature=`${t}|${lane}|${h}|${scale}|${count}`;
+      if(renderedGeometry.get(id)!==signature){
+        Object.assign(el.style,{left:((lane+.5)/count*100)+'%',top:y+'px',bottom:'auto',width:`min(38px, calc(100% / ${count} - 6px))`,height:`min(38px, calc(100% / ${count} - 6px))`,zIndex:String(100+Math.round(y)),display:'block',visibility:'visible',opacity:'1'});
+        renderedGeometry.set(id,signature);
+      }
+    }
+    for(const id of renderedGeometry.keys())if(!live.has(id))renderedGeometry.delete(id);
     updateViewport(Number($('seek')?.value)||0);
   }
   // Capture the original renderer exactly once. All future calls use the one stable wrapper.
@@ -137,18 +142,17 @@
     }catch(err){console.error('[Rhythm Forge] note creation failed',err);}
   },true);
 
-  // Selection click is allowed through to the core handler; after it updates selection, redraw geometry only.
-  document.addEventListener('click',function(e){if(e.target?.closest?.('#notes .note'))requestAnimationFrame(()=>{renderNotes();api.syncSelected();});},true);
+  // Note selection is a lightweight class/UI update in app-core; never rebuild the whole chart here.
   // Keep the chart's single source of truth synchronized whenever a setting changes.
   ['bpm','subdivision','keyCount','chartDurationInput','gameSpeed'].forEach(id=>{
-    $(id)?.addEventListener('input',()=>{if(id==='gameSpeed'&&$('gameSpeedValue'))$('gameSpeedValue').textContent=speed().toFixed(1)+'×';buildGuides();renderNotes();api.markDirty();persistAuto();});
+    $(id)?.addEventListener('input',()=>{if(id==='gameSpeed'&&$('gameSpeedValue'))$('gameSpeedValue').textContent=speed().toFixed(1)+'×';});
     $(id)?.addEventListener('change',()=>{buildGuides();renderNotes();api.markDirty();persistAuto();});
   });
   ['snap','autosave','tips','editorOffsetMs'].forEach(id=>$(id)?.addEventListener('change',()=>{api.markDirty();if(id==='editorOffsetMs')updateViewport(Number($('seek')?.value)||0);persistAuto();}));
   $('seek')?.addEventListener('input',e=>updateViewport(Number(e.target.value)||0));
   window.addEventListener('resize',()=>{buildGuides();renderNotes();});
   ['noteTime','noteLane'].forEach(id=>$(id)?.addEventListener('change',()=>requestAnimationFrame(()=>{renderNotes();persistAuto();})));
-  document.addEventListener('click',e=>{if(e.target?.closest?.('#nudgeBack,#nudgeForward,#deleteNote,#undo,#redo,[data-open-project]'))requestAnimationFrame(()=>{buildGuides();renderNotes();persistAuto();});},true);
+  // Edit buttons render only the changed note layer; guide DOM is rebuilt only when timing/layout settings change.
   const editorScreen=$('editor');if(editorScreen&&typeof MutationObserver!=='undefined'){new MutationObserver(()=>{if(editorScreen.classList.contains('active'))requestAnimationFrame(()=>{buildGuides();renderNotes();});}).observe(editorScreen,{attributes:true,attributeFilter:['class']});}
   // Rebuild once after legacy initialization; no duplicate guide or note layers are created afterwards.
   requestAnimationFrame(()=>{buildGuides();renderNotes();});

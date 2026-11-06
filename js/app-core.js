@@ -3,6 +3,8 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const defaults={4:['D','F','J','K'],6:['S','D','F','J','K','L'],8:['A','S','D','F','J','K','L',';']};
 let keys=JSON.parse(localStorage.getItem('rf_keys')||'null')||structuredClone(defaults), activeKey=4, offset=+(localStorage.getItem('rf_offset')||0), user='local', audio=null, audioUrl=null;
 let notes=[], selected=null, events=[], effects=[], images=[], undoStack=[];
+const noteElementsById = new Map();
+let selectedNoteElement = null;
 const toast=(m)=>{const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)};
 function show(id){
   $$('.screen').forEach(s=>s.classList.toggle('active',s.id===id));
@@ -40,19 +42,34 @@ function buildGuides(){
   }
   renderNotes();
 }
-function pushUndo(){undoStack.push(JSON.stringify({notes,events,effects}));if(undoStack.length>50)undoStack.shift()}
-function addNote(n){n.id=Date.now()+Math.random();notes.push(n);selected=n.id;renderNotes()}
+function pushUndo(){undoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});if(undoStack.length>50)undoStack.shift()}
+function setSelectedNote(id){if(selectedNoteElement)selectedNoteElement.classList.remove('selected');selected=id;selectedNoteElement=id==null?null:noteElementsById.get(String(id))||null;if(selectedNoteElement)selectedNoteElement.classList.add('selected');syncSelected()}
+function addNote(n){n.id=n.id??(Date.now()+Math.random());notes.push(n);setSelectedNote(n.id);renderNotes()}
 // Expose note creation for the editor's dynamically generated beat-grid click handler.
-window.addNote=addNote; window.renderNotes=renderNotes; window.getEditorNotes=()=>notes;
-function renderNotes(){noteLayer.innerHTML='';const lanes=editorLaneCount();noteLayer.style.display='grid';const viewDuration=editorViewDuration();notes.forEach(n=>{n.pos=positionFromTime(n.time);const el=document.createElement('button');el.className='note'+(n.id===selected?' selected':'');el.style.left=(((Math.max(0,Math.min(lanes-1,n.lane||0))+.5)/lanes)*100)+'%';el.style.top=(n.pos*100)+'%';el.style.zIndex=String(10+Math.round(n.pos*1000));el.textContent='';el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;el.onclick=e=>{e.stopPropagation();selected=n.id;renderNotes();syncSelected()};noteLayer.appendChild(el)});syncSelected();if($('#autosave')?.checked)localStorage.setItem('rf_chart',JSON.stringify(typeof chartSnapshot==='function'?chartSnapshot():{notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}))}
+window.addNote=addNote; window.renderNotes=renderNotes; window.getEditorNotes=()=>notes; window.getNoteElementById=id=>noteElementsById.get(String(id))||null;
+function renderNotes(){
+  const lanes=editorLaneCount();noteLayer.style.display='grid';
+  const liveIds=new Set();
+  for(const n of notes){
+    const id=String(n.id);liveIds.add(id);n.pos=positionFromTime(n.time);
+    let el=noteElementsById.get(id);
+    if(!el){el=document.createElement('button');el.type='button';el.className='note';el.dataset.noteId=id;el.textContent='';el.onclick=e=>{e.stopPropagation();setSelectedNote(n.id)};noteElementsById.set(id,el);noteLayer.appendChild(el)}
+    el.classList.toggle('selected',n.id===selected);
+    el.title=`${(n.time*1000).toFixed(0)} ms · 레인 ${(n.lane||0)+1}`;
+  }
+  for(const [id,el] of noteElementsById){if(!liveIds.has(id)){el.remove();noteElementsById.delete(id);if(el===selectedNoteElement)selectedNoteElement=null}}
+  selectedNoteElement=selected==null?null:noteElementsById.get(String(selected))||null;
+  syncSelected();
+}
+function persistEditorAutosave(){if(!$('#autosave')?.checked)return;try{localStorage.setItem('rf_chart',JSON.stringify(typeof chartSnapshot==='function'?chartSnapshot():{notes,events,effects,bpm:$('#bpm').value,subdivision:$('#subdivision').value,keyCount:$('#keyCount').value}))}catch(e){console.warn('[ADoA] autosave failed',e)}}
 function currentNote(){return notes.find(n=>n.id===selected)}
 function syncSelected(){const n=currentNote();$('#selectedInfo').textContent=n?`선택됨 · ${(n.time*1000).toFixed(0)}ms · 레인 ${(n.lane||0)+1}`:'노트를 선택하면 세부 정보가 표시됩니다.';if(n){$('#noteTime').value=n.time.toFixed(3);const max=+$('#keyCount').value;$('#noteLane').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i}">${i+1}</option>`).join('');$('#noteLane').value=Math.min(n.lane||0,max-1)}}
-function nudge(ms){const n=currentNote();if(!n)return;pushUndo();n.time=Math.max(0,n.time+ms/1000);n.pos=positionFromTime(n.time);renderNotes()}
-function deleteSelected(){if(selected===null)return;pushUndo();notes=notes.filter(n=>n.id!==selected);selected=null;renderNotes()}
-$('#noteTime').onchange=e=>{const n=currentNote();if(n){pushUndo();n.time=Math.max(0,+e.target.value||0);n.pos=positionFromTime(n.time);renderNotes()}};
-$('#noteLane').onchange=e=>{const n=currentNote();if(n){pushUndo();n.lane=+e.target.value;renderNotes()}};
+function nudge(ms){const n=currentNote();if(!n)return;pushUndo();n.time=Math.max(0,n.time+ms/1000);n.pos=positionFromTime(n.time);renderNotes();persistEditorAutosave()}
+function deleteSelected(){if(selected===null)return;pushUndo();notes=notes.filter(n=>n.id!==selected);setSelectedNote(null);renderNotes();persistEditorAutosave()}
+$('#noteTime').onchange=e=>{const n=currentNote();if(n){pushUndo();n.time=Math.max(0,+e.target.value||0);n.pos=positionFromTime(n.time);renderNotes();persistEditorAutosave()}};
+$('#noteLane').onchange=e=>{const n=currentNote();if(n){pushUndo();n.lane=+e.target.value;renderNotes();persistEditorAutosave()}};
 $('#nudgeBack').onclick=()=>nudge(-1);$('#nudgeForward').onclick=()=>nudge(1);$('#deleteNote').onclick=deleteSelected;
-$('#undo').onclick=()=>{const v=undoStack.pop();if(!v){toast('실행 취소할 작업이 없습니다.');return}const d=JSON.parse(v);notes=d.notes;events=d.events;effects=d.effects;selected=null;renderNotes();renderEvents();renderEffects()};
+$('#undo').onclick=()=>{const v=undoStack.pop();if(!v){toast('실행 취소할 작업이 없습니다.');return}const d=typeof v==='string'?JSON.parse(v):v;notes=d.notes;events=d.events;effects=d.effects;setSelectedNote(null);renderNotes();renderEvents();renderEffects()};
 $('#bpm').oninput=buildGuides;$('#subdivision').onchange=buildGuides;window.addEventListener('resize',buildGuides);setTimeout(buildGuides,80);
 $('#keyCount').onchange=()=>{const max=+$('#keyCount').value;$('#noteLane').innerHTML=Array.from({length:max},(_,i)=>`<option value="${i}">${i+1}</option>`).join('');renderNotes()};
 let duration=0;
@@ -187,8 +204,7 @@ function chartSnapshot(){
 function readProjects(){try{const a=JSON.parse(localStorage.getItem(projectStoreKey)||'[]');if(Array.isArray(a)&&a.length)return a;const legacy=localStorage.getItem('rf_chart');if(legacy){const d=JSON.parse(legacy);if(Array.isArray(d.notes))return [{id:'legacy-rf-chart',name:'이전 자동 저장 프로젝트',chart:d,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),legacy:true}]}return Array.isArray(a)?a:[]}catch{return []}}
 function writeProjects(a){localStorage.setItem(projectStoreKey,JSON.stringify(a))}
 function setProjectDirty(){editorDirty=true;}
-const oldPushUndo=pushUndo;
-pushUndo=function(){oldPushUndo();redoStack=[];setProjectDirty();updateUndoRedoButtons()};
+pushUndo=function(){undoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});if(undoStack.length>50)undoStack.shift();redoStack=[];setProjectDirty();updateUndoRedoButtons()};
 function updateUndoRedoButtons(){const u=$('#undo'),r=$('#redo');if(u)u.disabled=!undoStack.length;if(r)r.disabled=!redoStack.length}
 function restoreSnapshot(raw){const d=typeof raw==='string'?JSON.parse(raw):raw;notes=(d.notes||[]).map(n=>({...n,time:Number(n.time)||0,lane:Number(n.lane)||0,id:n.id??(Date.now()+Math.random()),pos:positionFromTime(n.time),speed:Number(n.speed)||Number(d.settings?.gameSpeed)||Number(d.speed)||1}));events=JSON.parse(JSON.stringify(d.events||[]));effects=JSON.parse(JSON.stringify(d.effects||[]));images=(d.images||[]).map(x=>({...x}));if(d.bpm)$('#bpm').value=d.bpm;if(d.subdivision)$('#subdivision').value=d.subdivision;if(d.keyCount)$('#keyCount').value=d.keyCount;if(typeof d.offset==='number'){offset=d.offset;updateOffset();if($('#editorOffsetMs'))$('#editorOffsetMs').value=String(d.offset)}const st=d.settings||{};if(st.gameSpeed!=null&&$('#gameSpeed'))$('#gameSpeed').value=String(Math.max(.5,Math.min(10,Number(st.gameSpeed)||1)));if(st.chartDuration!=null&&$('#chartDurationInput'))$('#chartDurationInput').value=String(st.chartDuration);if(st.snap!=null&&$('#snap'))$('#snap').checked=!!st.snap;if(st.autosave!=null&&$('#autosave'))$('#autosave').checked=!!st.autosave;if(st.tips!=null&&$('#tips'))$('#tips').checked=!!st.tips;if(st.guidesVisible!=null)window.adoaGuidesVisible=!!st.guidesVisible;if($('#noteLane'))$('#noteLane').innerHTML=Array.from({length:editorLaneCount()},(_,i)=>`<option value="${i}">${i+1}번 레인</option>`).join('');selected=null;buildGuides();renderNotes();renderEvents();renderEffects();renderImages();editorDirty=false;undoStack=[];redoStack=[];updateUndoRedoButtons()}
 function showProjectModal(title,body,actions){let m=$('#projectModal');if(!m){m=document.createElement('div');m.id='projectModal';m.className='project-modal-back';m.innerHTML='<div class="project-modal" role="dialog" aria-modal="true"><div id="projectModalContent"></div></div>';document.body.appendChild(m)}$('#projectModalContent').innerHTML=`<h2>${title}</h2>${body}<div class="project-actions" id="projectModalActions"></div>`;const box=$('#projectModalActions');actions.forEach(a=>{const b=document.createElement('button');b.textContent=a.label;if(a.primary)b.className='primary';b.onclick=()=>a.run();box.appendChild(b)});m.classList.remove('hidden');return m}
@@ -208,8 +224,8 @@ if(oldLoadBridge&&oldLoadBridge.loadChart){const oldLoad=oldLoadBridge.loadChart
 $$('[data-screen="editor"]').forEach(b=>b.onclick=showEditorChooser);
 const editorBack=$('#editor .back');if(editorBack)editorBack.onclick=leaveEditor;
 $('#saveProject').onclick=saveCurrentProject;
-$('#undo').onclick=()=>{if(!undoStack.length){toast('실행 취소할 작업이 없습니다.');return}redoStack.push(JSON.stringify({notes,events,effects}));const d=JSON.parse(undoStack.pop());notes=d.notes;events=d.events;effects=d.effects;selected=null;renderNotes();renderEvents();renderEffects();setProjectDirty();updateUndoRedoButtons()};
-$('#redo').onclick=()=>{if(!redoStack.length){toast('다시 실행할 작업이 없습니다.');return}undoStack.push(JSON.stringify({notes,events,effects}));const d=JSON.parse(redoStack.pop());notes=d.notes;events=d.events;effects=d.effects;selected=null;renderNotes();renderEvents();renderEffects();setProjectDirty();updateUndoRedoButtons()};
+$('#undo').onclick=()=>{if(!undoStack.length){toast('실행 취소할 작업이 없습니다.');return}redoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});const d=undoStack.pop();notes=d.notes;events=d.events;effects=d.effects;setSelectedNote(null);renderNotes();renderEvents();renderEffects();setProjectDirty();persistEditorAutosave();updateUndoRedoButtons()};
+$('#redo').onclick=()=>{if(!redoStack.length){toast('다시 실행할 작업이 없습니다.');return}undoStack.push({notes:notes.map(n=>({...n})),events:events.map(e=>({...e})),effects:effects.map(e=>({...e}))});const d=redoStack.pop();notes=d.notes;events=d.events;effects=d.effects;setSelectedNote(null);renderNotes();renderEvents();renderEffects();setProjectDirty();persistEditorAutosave();updateUndoRedoButtons()};
 // Track edits not routed through pushUndo as well.
 const oldAddNote=addNote;addNote=function(n){oldAddNote(n);setProjectDirty();updateUndoRedoButtons()};
 const oldRenderNotes=renderNotes;renderNotes=function(){noteLayer.style.setProperty('--lane-count',editorLaneCount());oldRenderNotes();};
