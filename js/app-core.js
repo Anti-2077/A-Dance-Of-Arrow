@@ -993,14 +993,14 @@ function adoDurationForChart(){const list=Array.isArray(gameChart?.notes)?gameCh
 // Replace start/tick with stable per-note DOM updates to avoid clearing/recreating all notes every frame.
 startGame=function(){
   if(!gameChart){toast('먼저 플레이할 채보를 선택하세요.');return;}
-  stopGame();gameMissed=new Set();gameHit=new Set();gameScore=0;gameMiss=0;const startOffsetMs=Number(gameChart.offset??gameChart.editorOffsetMs??gameChart.settings?.editorOffsetMs??0)||0;gameElapsed=startOffsetMs/1000;adoResetHUD();
+  stopGame();gameMissed=new Set();gameHit=new Set();gameScore=0;gameMiss=0;gameElapsed=0;adoResetHUD();
   adoEditorPlayRun=gameChartSource?.source==='editor-preview';adoInvincibleForRun=adoEditorPlayRun&&adoInvincibleRequested;
   const screen=document.getElementById('game');screen?.classList.toggle('adoa-editor-play',adoEditorPlayRun);
   const ret=document.getElementById('gameReturnEditor');if(ret)ret.style.display=adoEditorPlayRun?'inline-flex':'none';
   adoPrepareGameNotes();
   gameRunning=true;gameStartAt=performance.now();const overlay=document.getElementById('gameOverlay');if(overlay)overlay.classList.add('hidden');
   try{if(adoGamePanel?.requestFullscreen&&!document.fullscreenElement)adoGamePanel.requestFullscreen().catch(()=>{});}catch{}
-  if(gameAudio){try{gameAudio.currentTime=Math.max(0,Math.min(gameElapsed,Number.isFinite(gameAudio.duration)?gameAudio.duration:Math.max(0,gameElapsed)));gameAudio.play().catch(()=>{});}catch{}}
+  if(gameAudio){try{gameAudio.currentTime=0;gameAudio.play().catch(()=>{});}catch{}}
   const stage=document.getElementById('gameStage');try{if(stage?.requestFullscreen&&!document.fullscreenElement){/* panel fullscreen button is user-triggered; don't force fullscreen here */}}catch{}
   gameRAF=requestAnimationFrame(adoTickGame);
 };
@@ -1046,8 +1046,6 @@ function adoRefreshHeldKeys(){
   for(const key of adoHeldKeys){const lane=mapping.findIndex(k=>String(k).toUpperCase()===String(key).toUpperCase());if(lane>=0)heldLanes.add(lane);}
   document.querySelectorAll('#gameTargets .game-target').forEach((el,i)=>el.classList.toggle('pressed',heldLanes.has(i)));
   document.querySelectorAll('.adoa-input-lane').forEach(el=>el.classList.toggle('active',heldLanes.has(Number(el.dataset.inputLane))));
-  // The editor's own receptor row receives the same held-key feedback during editor preview.
-  document.querySelectorAll('#editorTargets .editor-target').forEach((el,i)=>el.classList.toggle('pressed',heldLanes.has(i)));
 }
 function adoGameKeyHandler(e){
   if(!gameRunning||!gameChart||document.getElementById('game')?.classList.contains('active')!==true)return;
@@ -1189,14 +1187,13 @@ loadChartIntoEditor=function(d){const r=adoBaseLoadChartIntoEditor.apply(this,ar
 const adoBaseBeginNewProject=beginNewProject;
 beginNewProject=function(){const r=adoBaseBeginNewProject.apply(this,arguments);if(adoDifficultyField)adoSetDifficulty(1);return r;};
 
-// A seek-bar value is the chart's visible time. Convert it to the raw playback clock
-// by adding the chart offset; adoTickGame subtracts that offset exactly once.
+// The seek bar and audio share one clock beginning at 0. Chart motion alone is
+// shifted by the stored offset inside adoTickGame; seeking never shifts the audio clock.
 const adoSeekWithOffset=document.getElementById('gameSeek');
 if(adoSeekWithOffset){
   adoSeekWithOffset.oninput=e=>{
     const chartTime=Math.max(0,Number(e.target.value)||0);
-    const offsetMs=Number(gameChart?.offset??gameChart?.editorOffsetMs??gameChart?.settings?.editorOffsetMs??0)||0;
-    const rawTime=chartTime+offsetMs/1000;
+    const rawTime=chartTime;
     gameElapsed=rawTime;gameStartAt=performance.now();gameHit=new Set();gameMissed=new Set();gameScore=0;gameMiss=0;
     adoResetHUD();adoPrepareGameNotes();
     if(gameAudio){try{gameAudio.currentTime=Math.max(0,Math.min(rawTime,Number.isFinite(gameAudio.duration)?gameAudio.duration:Math.max(0,rawTime)));}catch{}}
@@ -1212,9 +1209,9 @@ adoTickGame=function(){
   if(!gameChart)return;
   const raw=gameElapsed+(performance.now()-gameStartAt)/1000;
   const offsetMs=Number(gameChart.offset??gameChart.editorOffsetMs??gameChart.settings?.editorOffsetMs??0)||0;
-  const chartTime=Math.max(0,raw-offsetMs/1000);
-  const seek=document.getElementById('gameSeek');if(seek){seek.max=String(Math.max(1,adoBaseDurationWithOffset()));if(!seek.matches(':active'))seek.value=String(chartTime);}
-  const clock=document.getElementById('gameClock');if(clock)clock.textContent=chartTime.toFixed(3)+'s';
+  const chartTime=raw-offsetMs/1000;
+  const seek=document.getElementById('gameSeek');if(seek){seek.max=String(Math.max(1,adoBaseDurationWithOffset()));if(!seek.matches(':active'))seek.value=String(Math.max(0,raw));}
+  const clock=document.getElementById('gameClock');if(clock)clock.textContent=Math.max(0,raw).toFixed(3)+'s';
 };
 tickGame=adoTickGame;
 
