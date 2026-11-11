@@ -1,0 +1,3 @@
+/* Editor preview reuses gameplay, but its normal Main button is not a valid exit. */
+#game.adoa-editor-play .heading > .back { display: none !important; }
+#game.adoa-editor-play .adoa-return-editor { display: inline-flex !important; }
