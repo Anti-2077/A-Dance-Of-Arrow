@@ -114,7 +114,20 @@ async function blobToBase64(blob){
 async function exportEditorProjectJson(){
   const button=$('#saveChart');
   if(button?.dataset.exporting==='1')return;
-  if(button){button.dataset.exporting='1';button.disabled=true;button.textContent='JSON 생성 중…'}
+  if(button){button.dataset.exporting='1';button.disabled=true;button.textContent='저장 준비 중…'}
+  // The native save dialog must be opened synchronously from the click gesture,
+  // before any asynchronous audio/image reads begin.
+  const safeName=String(currentProjectName||'A_Dance_Of_Arrow').replace(/[\\/:*?"<>|]+/g,'_').trim()||'A_Dance_Of_Arrow';
+  let pickerResultPromise=null;
+  if(typeof window.showSaveFilePicker==='function'){
+    try{
+      pickerResultPromise=window.showSaveFilePicker({
+        suggestedName:safeName+'.json',
+        types:[{description:'JSON 프로젝트 파일',accept:{'application/json':['.json']}}],
+        excludeAcceptAllOption:false
+      }).then(handle=>({handle}),error=>({error}));
+    }catch(error){pickerResultPromise=Promise.resolve({error})}
+  }
   try{
     const chart=typeof chartSnapshot==='function'?chartSnapshot():window.ADOAChartBridge?.getCurrentChart?.();
     if(!chart||!Array.isArray(chart.notes))throw new Error('내보낼 채보 데이터가 없습니다.');
@@ -160,12 +173,20 @@ async function exportEditorProjectJson(){
     };
     const json=JSON.stringify(payload,null,2);
     const file=new Blob([json],{type:'application/json;charset=utf-8'});
-    const url=URL.createObjectURL(file);
-    const a=document.createElement('a');
-    const safeName=String(currentProjectName||'A_Dance_Of_Arrow').replace(/[\\/:*?"<>|]+/g,'_').trim()||'A_Dance_Of_Arrow';
-    a.href=url;a.download=safeName+'.json';a.style.display='none';document.body.appendChild(a);a.click();a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),10000);
-    toast(`JSON 내보내기 완료 · 채보 ${chart.notes.length}개 · 이펙트 ${(chart.effects||[]).length}개 · ${audioData?'음원 포함':'음원 없음'} · 이미지 ${imageAssets.length}개`);
+    if(pickerResultPromise){
+      const result=await pickerResultPromise;
+      if(result.error){if(result.error.name==='AbortError'){toast('JSON 저장을 취소했습니다.');return}throw result.error}
+      const writable=await result.handle.createWritable();
+      await writable.write(file);
+      await writable.close();
+    }else{
+      // Fallback for browsers without the File System Access API.
+      const url=URL.createObjectURL(file);
+      const a=document.createElement('a');
+      a.href=url;a.download=safeName+'.json';a.style.display='none';document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),10000);
+    }
+    toast(`JSON 저장 완료 · 채보 ${chart.notes.length}개 · 이펙트 ${(chart.effects||[]).length}개 · ${audioData?'음원 포함':'음원 없음'} · 이미지 ${imageAssets.length}개`);
   }catch(err){
     console.error('[ADoA] project JSON export failed:',err);
     toast('JSON 내보내기 실패: '+(err?.message||'알 수 없는 오류'));
