@@ -104,7 +104,49 @@ function renderEffects(){$('#effectList').innerHTML=effects.map((e,i)=>{const d=
 $('#imageFiles').onchange=e=>{[...e.target.files].forEach(f=>images.push({name:f.name,priority:images.length+1,url:URL.createObjectURL(f)}));renderImages()};
 function renderImages(){$('#imageList').innerHTML=images.map((im,i)=>`<div class="listitem"><span>${escapeHtml(im.name)} · 레이어 ${im.priority}</span><span><button data-up="${i}">↑</button> <button data-down="${i}">↓</button> <button data-remove-image="${i}">×</button></span></div>`).join('');$$('[data-up]').forEach(b=>b.onclick=()=>moveImage(+b.dataset.up,-1));$$('[data-down]').forEach(b=>b.onclick=()=>moveImage(+b.dataset.down,1));$$('[data-remove-image]').forEach(b=>b.onclick=()=>{images.splice(+b.dataset.removeImage,1);images.forEach((x,i)=>x.priority=i+1);renderImages()})}
 function moveImage(i,d){const j=i+d;if(j<0||j>=images.length)return;[images[i],images[j]]=[images[j],images[i]];images.forEach((x,k)=>x.priority=k+1);renderImages()}
-$('#saveChart').onclick=()=>{const data={format:'RhythmForgeChart',version:1,bpm:+$('#bpm').value,subdivision:+$('#subdivision').value,keyCount:+$('#keyCount').value,offset,notes:notes.map(n=>({time:n.time,lane:n.lane,pos:n.pos})),events,effects,images:images.map(x=>({name:x.name,priority:x.priority}))};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='rhythm-chart.json';a.click();URL.revokeObjectURL(url);toast('채보 JSON을 내보냈습니다.')};
+async function blobToBase64(blob){
+  const bytes=new Uint8Array(await blob.arrayBuffer());let binary='';
+  const chunk=0x8000;for(let i=0;i<bytes.length;i+=chunk)binary+=String.fromCharCode(...bytes.subarray(i,Math.min(i+chunk,bytes.length)));
+  return btoa(binary);
+}
+async function exportEditorProjectJson(){
+  try{
+    const chart=typeof chartSnapshot==='function'?chartSnapshot():window.ADOAChartBridge?.getCurrentChart?.();
+    if(!chart||!Array.isArray(chart.notes))throw new Error('내보낼 채보 데이터가 없습니다.');
+    let audioRecord=null;
+    if(activeAudioFile)audioRecord={blob:activeAudioFile,name:activeAudioName||activeAudioFile.name||'audio'};
+    else if(currentProjectId){audioRecord=await getProjectAudio(currentProjectId);}
+    else if(audioUrl){try{const response=await fetch(audioUrl);if(response.ok)audioRecord={blob:await response.blob(),name:activeAudioName||'audio'};}catch{}}
+    let audioData=null;
+    if(audioRecord?.blob){
+      audioData={name:audioRecord.name||activeAudioName||'audio',mimeType:audioRecord.blob.type||'application/octet-stream',size:audioRecord.blob.size,encoding:'base64',data:await blobToBase64(audioRecord.blob)};
+    }
+    const imageAssets=[];
+    for(const item of images||[]){
+      let asset={name:item.name||'image',priority:Number(item.priority)||imageAssets.length+1};
+      if(item.url){
+        try{const response=await fetch(item.url);if(response.ok){const blob=await response.blob();asset.mimeType=blob.type||'application/octet-stream';asset.size=blob.size;asset.encoding='base64';asset.data=await blobToBase64(blob);}}
+        catch(err){console.warn('[ADoA] 이미지 포함 실패:',item.name,err);}
+      }
+      imageAssets.push(asset);
+    }
+    const payload={
+      ...chart,
+      format:'A Dance Of Arrow Project',version:2,
+      project:{name:currentProjectName||'A Dance Of Arrow 프로젝트',exportedAt:new Date().toISOString()},
+      audio:audioData,
+      assets:{images:imageAssets}
+    };
+    const json=JSON.stringify(payload,null,2),file=new Blob([json],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(file),a=document.createElement('a');
+    const safeName=String(currentProjectName||'A_Dance_Of_Arrow').replace(/[\\/:*?"<>|]+/g,'_').trim()||'A_Dance_Of_Arrow';
+    a.href=url;a.download=safeName+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+    const audioLabel=audioData?'음원 포함':'음원 없음';
+    toast(`프로젝트 JSON 내보내기 완료 · 채보 ${chart.notes.length}개 · 이펙트 ${(chart.effects||[]).length}개 · ${audioLabel}`);
+  }catch(err){console.error('[ADoA] project JSON export failed:',err);toast('JSON 내보내기에 실패했습니다: '+(err?.message||'알 수 없는 오류'));}
+}
+$('#saveChart').textContent='프로젝트 JSON 내보내기';
+$('#saveChart').onclick=exportEditorProjectJson;
 const saved=localStorage.getItem('rf_chart');if(saved){try{const d=JSON.parse(saved);notes=(d.notes||[]).map(n=>({...n,pos:positionFromTime(n.time)}));events=d.events||[];effects=d.effects||[];if(d.bpm)$('#bpm').value=d.bpm;if(d.subdivision)$('#subdivision').value=d.subdivision;if(d.keyCount)$('#keyCount').value=d.keyCount;renderNotes();renderEvents();renderEffects()}catch{}}
 // Local developer chart library, gameplay, and rule-based auto chart generation.
 let serverCharts=[], gameChart=null, gameAudioUrl=null, autoAudioUrl=null, autoAudioDuration=90, gameAudio=null, gameStartAt=0, gameElapsed=0, gameRunning=false, gameRAF=0, gameChartSource=null, gameHit=new Set(), gameScore=0, gameMiss=0;

@@ -14,7 +14,7 @@
   ];
   try {
     const fragments = await Promise.all(pages.map(async name => {
-      const response = await fetch('pages/' + name + '?v=20261108a', {cache:'no-store'});
+      const response = await fetch('pages/' + name + '?v=20261111a', {cache:'no-store'});
       if (!response.ok) throw new Error('페이지 파일을 불러오지 못했습니다: pages/' + name);
       return response.text();
     }));
@@ -22,7 +22,7 @@
     for (const name of scripts) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'js/' + name + '?v=20261108a';
+        script.src = 'js/' + name + '?v=20261111a';
         script.onload = resolve;
         script.onerror = () => reject(new Error('스크립트를 불러오지 못했습니다: js/' + name));
         document.body.appendChild(script);
