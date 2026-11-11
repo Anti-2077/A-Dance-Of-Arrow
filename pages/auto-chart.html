@@ -1,0 +1,30 @@
+<!-- Auto chart UI. Logic lives in js/auto-chart-ai.js to avoid coupling to the editor runtime. -->
+<section id="autochart" class="screen">
+ <div class="heading"><div><div class="eyebrow">AUTO CHART STUDIO</div><h2>AI 자동 채보 생성</h2></div><button class="back">← 메인으로</button></div>
+ <div class="panel">
+  <p class="muted">사용자가 입력한 BPM을 기준으로 음악을 분석합니다. 트럼펫 같은 지속형 멜로디는 제외하고 짧은 타격음과 작은 연속 타격까지 감지합니다. 큰 타격일수록 동시 입력을 늘리고, 채보는 좌우 한쪽에 더 많이 배치합니다.</p>
+  <div class="toolbar"><label class="filebutton">♪ 음악 파일 선택<input id="autoAudioFile" type="file" accept="audio/*"></label><span id="autoAudioName" class="muted">음악 파일 선택 안 됨</span></div>
+  <div class="toolbar">
+   <label>BPM <input id="autoBpm" type="number" min="30" max="400" value="180"></label>
+   <label>박자 <select id="autoMeter"><option value="4">4/4</option><option value="3">3/4</option><option value="6">6/8</option><option value="5">5/4</option></select></label>
+   <label>분석 세부 박자 <select id="autoSubdivision"><option value="1">4분음표</option><option value="2">8분음표</option><option value="4">16분음표</option><option value="8" selected>32분음표</option></select></label>
+   <label>키 개수 <select id="autoLanes"><option value="4">4키</option><option value="6">6키</option><option value="8" selected>8키</option></select></label>
+   <label>난이도 <select id="autoDensity"><option value="1">Easy</option><option value="2" selected>Normal</option><option value="3">Hard</option><option value="4">Expert</option></select></label>
+  </div>
+  <div class="toolbar"><button id="analyzeAutoAudio">⌕ 리듬 분석</button><button class="primary" id="generateAutoChart">✦ AI 채보 생성</button></div>
+  <div id="autoAnalysisPanel" class="auto-analysis-panel" aria-live="polite">
+   <div class="auto-analysis-heading"><strong>음악 분석 결과</strong><span id="autoAnalysisState" class="muted">분석 전</span></div>
+   <div class="auto-analysis-grid">
+    <div><span class="muted">감지 타격음</span><strong id="autoOnsetCount">—</strong></div>
+    <div><span class="muted">자동 오프셋</span><strong id="autoOffsetValue">—</strong></div>
+    <div><span class="muted">리듬 밀도</span><strong id="autoRhythmDensity">—</strong></div>
+    <div><span class="muted">분석 길이</span><strong id="autoAnalyzedDuration">—</strong></div>
+   </div>
+   <p id="autoAnalysisSummary" class="muted">음악 파일을 선택하고 BPM을 입력한 다음 리듬 분석을 실행하세요.</p>
+   <div class="auto-progress-track"><div id="autoAnalysisProgress" class="auto-progress-fill"></div></div>
+  </div>
+  <div class="toolbar"><label>곡 이름 <input id="autoTitle" type="text" placeholder="곡 이름" style="width:180px"></label><label>제작자 <input id="autoArtist" type="text" placeholder="제작자" style="width:160px"></label></div>
+  <div class="toolbar"><button id="previewAutoChart">▶ 생성 채보 플레이</button><button id="editAutoChart">에디터에서 다듬기</button><button id="saveAutoChart">JSON으로 저장</button></div>
+  <p class="help" id="autoStatus">음악 파일을 불러온 뒤 리듬 분석을 실행하세요. 분석 결과는 현재 브라우저에서 처리되며 서버로 전송되지 않습니다.</p>
+ </div>
+</section>
