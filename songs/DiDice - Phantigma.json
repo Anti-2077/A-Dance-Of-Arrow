@@ -23361,7 +23361,8 @@
   "difficulty": 17,
   "settings": {
     "editorOffsetMs": 2600,
-    "difficulty": 17
+    "difficulty": 17,
+    "gameSpeed": 7.5
   },
   "project": {
     "name": "DiDice - Phantigma",
@@ -23376,5 +23377,6 @@
   },
   "assets": {
     "images": []
-  }
+  },
+  "speed": 7.5
 }
