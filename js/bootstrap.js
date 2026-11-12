@@ -14,7 +14,7 @@
   ];
   try {
     const fragments = await Promise.all(pages.map(async name => {
-      const response = await fetch('pages/' + name + '?v=20261112a', {cache:'no-store'});
+      const response = await fetch('pages/' + name + '?v=20261112b', {cache:'no-store'});
       if (!response.ok) throw new Error('페이지 파일을 불러오지 못했습니다: pages/' + name);
       return response.text();
     }));
@@ -22,7 +22,7 @@
     for (const name of scripts) {
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
-        script.src = 'js/' + name + '?v=20261112a';
+        script.src = 'js/' + name + '?v=20261112b';
         script.onload = resolve;
         script.onerror = () => reject(new Error('스크립트를 불러오지 못했습니다: js/' + name));
         document.body.appendChild(script);
@@ -31,7 +31,7 @@
     // Load the user-provided JSON as the first built-in song. Its embedded audio is
     // decoded by the app at selection time; the JSON remains a standalone project asset.
     try {
-      const songResponse = await fetch('songs/DiDice - Phantigma.json?v=20261112a', {cache:'no-store'});
+      const songResponse = await fetch('songs/DiDice - Phantigma.json?v=20261112b', {cache:'no-store'});
       if (!songResponse.ok) throw new Error('기본 수록곡 JSON을 불러오지 못했습니다.');
       const songProject = await songResponse.json();
       const audio = songProject.audio;

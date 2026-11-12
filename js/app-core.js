@@ -220,8 +220,8 @@ window.ADOARefreshGameCharts();
 
 // Local chart bridge: editor data remains entirely in this browser.
 window.ADOAChartBridge={
- getCurrentChart(){return {format:'RhythmForgeChart',version:1,bpm:+$('#bpm').value,subdivision:+$('#subdivision').value,keyCount:+$('#keyCount').value,offset,notes:notes.map(n=>({time:n.time,lane:n.lane,pos:n.pos})),events:structuredClone(events),effects:structuredClone(effects),images:images.map(x=>({name:x.name,priority:x.priority}))}},
- loadChart(d){if(!d||!Array.isArray(d.notes))throw new Error('올바른 채보 데이터가 아닙니다.');notes=d.notes.map(n=>({time:Number(n.time)||0,lane:Number(n.lane)||0,pos:positionFromTime(Number(n.time)||0),id:Date.now()+Math.random()}));events=Array.isArray(d.events)?d.events:[];effects=Array.isArray(d.effects)?d.effects:[];images=Array.isArray(d.images)?d.images:[];if(d.bpm)$('#bpm').value=d.bpm;if(d.subdivision)$('#subdivision').value=d.subdivision;if(d.keyCount)$('#keyCount').value=d.keyCount;if(typeof d.offset==='number'){offset=d.offset;updateOffset()}selected=null;renderNotes();renderEvents();renderEffects();renderImages();buildGuides();localStorage.setItem('rf_chart',JSON.stringify(this.getCurrentChart()));show('editor');toast('채보를 에디터에 불러왔습니다.');}
+ getCurrentChart(){const speed=Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1));return {format:'RhythmForgeChart',version:2,bpm:+$('#bpm').value,subdivision:+$('#subdivision').value,keyCount:+$('#keyCount').value,offset,speed,settings:{gameSpeed:speed},notes:notes.map(n=>({time:n.time,lane:n.lane,pos:n.pos,speed:Number(n.speed)||speed})),events:structuredClone(events),effects:structuredClone(effects),images:images.map(x=>({name:x.name,priority:x.priority}))}},
+ loadChart(d){if(!d||!Array.isArray(d.notes))throw new Error('올바른 채보 데이터가 아닙니다.');const chartSpeed=Math.max(.5,Math.min(10,Number(d.settings?.gameSpeed??d.speed)||1));if($('#gameSpeed'))$('#gameSpeed').value=String(chartSpeed);if($('#gameSpeedValue'))$('#gameSpeedValue').textContent=chartSpeed.toFixed(1)+'×';notes=d.notes.map(n=>({time:Number(n.time)||0,lane:Number(n.lane)||0,speed:Math.max(.5,Math.min(10,Number(n.speed)||chartSpeed)),pos:positionFromTime(Number(n.time)||0),id:Date.now()+Math.random()}));events=Array.isArray(d.events)?d.events:[];effects=Array.isArray(d.effects)?d.effects:[];images=Array.isArray(d.images)?d.images:[];if(d.bpm)$('#bpm').value=d.bpm;if(d.subdivision)$('#subdivision').value=d.subdivision;if(d.keyCount)$('#keyCount').value=d.keyCount;if(typeof d.offset==='number'){offset=d.offset;updateOffset()}selected=null;renderNotes();renderEvents();renderEffects();renderImages();buildGuides();localStorage.setItem('rf_chart',JSON.stringify(this.getCurrentChart()));show('editor');toast('채보를 에디터에 불러왔습니다.');}
 };
 // ===== A Dance Of Arrow 안정화 패치 =====
 // 이 블록은 메인 <script> 안에서 window.ADOAChartBridge 정의 뒤,
@@ -1001,7 +1001,8 @@ editorViewDuration = function(){
   return Math.max(chosen, latest + beatStep()*2, Number.isFinite(duration)&&duration>0?Math.min(duration,chosen):0);
 };
 chartSnapshot = function(){
-  const base = {format:'RhythmForgeChart',version:1,bpm:+$('#bpm').value||180,subdivision:+$('#subdivision').value||4,keyCount:+$('#keyCount').value||8,offset,notes:notes.map(n=>({time:Number(n.time)||0,lane:Number(n.lane)||0,id:n.id,pos:n.pos})),events:JSON.parse(JSON.stringify(events||[])),effects:JSON.parse(JSON.stringify(effects||[])),images:(images||[]).map(x=>({name:x.name,priority:x.priority}))};
+  const chartSpeed=Math.max(.5,Math.min(10,Number($('#gameSpeed')?.value)||1));
+  const base = {format:'RhythmForgeChart',version:2,bpm:+$('#bpm').value||180,subdivision:+$('#subdivision').value||4,keyCount:+$('#keyCount').value||8,offset,speed:chartSpeed,settings:{gameSpeed:chartSpeed},notes:notes.map(n=>({time:Number(n.time)||0,lane:Number(n.lane)||0,id:n.id,pos:n.pos,speed:Math.max(.5,Math.min(10,Number(n.speed)||chartSpeed))})),events:JSON.parse(JSON.stringify(events||[])),effects:JSON.parse(JSON.stringify(effects||[])),images:(images||[]).map(x=>({name:x.name,priority:x.priority}))};
   base.duration = Math.max(1,Math.min(600,Number(document.getElementById('chartDurationInput')?.value)||adoEditorDuration||90));
   return base;
 };
@@ -1016,6 +1017,10 @@ restoreSnapshot = function(raw){
 const adoOldLoadChartIntoEditor = loadChartIntoEditor;
 loadChartIntoEditor = function(d){
   adoOldLoadChartIntoEditor(d);
+  const chartSpeed=Math.max(.5,Math.min(10,Number(d?.settings?.gameSpeed??d?.speed)||1));
+  if(document.getElementById('gameSpeed'))document.getElementById('gameSpeed').value=String(chartSpeed);
+  if(document.getElementById('gameSpeedValue'))document.getElementById('gameSpeedValue').textContent=chartSpeed.toFixed(1)+'×';
+  notes.forEach((n,i)=>{n.speed=Math.max(.5,Math.min(10,Number(d?.notes?.[i]?.speed)||chartSpeed));});
   adoEditorDuration=Math.max(1,Math.min(600,Number(d?.duration)||90));
   const input=document.getElementById('chartDurationInput'); if(input)input.value=String(adoEditorDuration);
   requestAnimationFrame(()=>{buildGuides();renderNotes()});
@@ -1123,8 +1128,9 @@ function adoTickGame(){
   if(typeof adoApplyTimedVisualEvents==='function') adoApplyTimedVisualEvents(effectiveT);
   const list=Array.isArray(gameChart.notes)?gameChart.notes:[];
   const count=Math.max(1,Math.min(8,Number(gameChart.keyCount)||8));
-  const speed=Math.max(.5,Math.min(10,Number(document.getElementById('gameSpeed')?.value)||1));
-  const approach=2.0/speed,judgeY=.76;
+  const legacyNoteSpeed=Array.isArray(gameChart?.notes)?gameChart.notes.find(n=>Number.isFinite(Number(n?.speed))&&Number(n.speed)>0)?.speed:undefined;
+  const chartSpeed=Math.max(.5,Math.min(10,Number(gameChart?.settings?.gameSpeed??gameChart?.speed??legacyNoteSpeed) || (gameChartSource?.source==='editor-preview' ? Number(document.getElementById('gameSpeed')?.value) : 1) || 1));
+  const judgeY=.76;
   const stage=document.getElementById('gameStage'),height=stage?.clientHeight||600;
   const last=list.reduce((m,n)=>Math.max(m,Number(n.time)||0),0);
   const audioDuration=Number(gameAudio?.duration);
@@ -1135,6 +1141,7 @@ function adoTickGame(){
   for(let i=0;i<list.length;i++){
     const n=list[i],noteTime=Math.max(0,Number(n.time)||0),dt=noteTime-effectiveT,el=adoGameNoteEls[i];
     if(!el)continue;
+    const approach=2.0/chartSpeed;
     if(gameHit.has(i)||gameMissed.has(i)){el.style.display='none';continue;}
     if(dt < -0.150){gameMissed.add(i);gameMiss++;adoGameCounts.miss++;adoFlashJudgement('MISS','miss');adoSetGameHealthAfterMiss();el.style.display='none';if(!gameRunning)return;continue;}
     if(dt>approach){el.style.display='none';continue;}
