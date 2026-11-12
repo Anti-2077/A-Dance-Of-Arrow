@@ -983,6 +983,7 @@ if (adoEditorToolbar && !document.getElementById('chartDurationInput')) {
   const invButton = document.createElement('button'); invButton.id='adoaInvincibleToggle'; invButton.className='adoa-invincible'; invButton.textContent='♾ 무적 모드: 꺼짐'; fsButton.insertAdjacentElement('afterend',invButton);
 }
 let adoInvincibleRequested = false;
+let adoGameInvincibleRequested = false;
 let adoInvincibleForRun = false;
 let adoEditorPlayRun = false;
 let adoGameHealth = 5;
@@ -1109,7 +1110,7 @@ function adoGetChartTime(){return Math.max(0,adoGetTimelineTime()-adoGetOffsetSe
 startGame=function(){
   if(!gameChart){toast('먼저 플레이할 채보를 선택하세요.');return;}
   stopGame();gameMissed=new Set();gameHit=new Set();gameScore=0;gameMiss=0;gameElapsed=0;adoResetHUD();
-  adoEditorPlayRun=gameChartSource?.source==='editor-preview';adoInvincibleForRun=adoEditorPlayRun&&adoInvincibleRequested;
+  adoEditorPlayRun=gameChartSource?.source==='editor-preview';adoInvincibleForRun=adoEditorPlayRun?adoInvincibleRequested:adoGameInvincibleRequested;
   const screen=document.getElementById('game');screen?.classList.toggle('adoa-editor-play',adoEditorPlayRun);
   const ret=document.getElementById('gameReturnEditor');if(ret)ret.style.display=adoEditorPlayRun?'inline-flex':'none';
   adoPrepareGameNotes();
@@ -1348,5 +1349,40 @@ document.getElementById('gameBackToSelect')?.addEventListener('click',()=>{
 document.getElementById('refreshGameCharts')?.addEventListener('click',()=>window.ADOARefreshGameCharts?.());
 document.getElementById('openChartLibrary')?.addEventListener('click',()=>showOriginal('community'));
 document.getElementById('chartLibraryBack')?.addEventListener('click',()=>showOriginal('game-select'));
+
+// Normal gameplay has its own invincibility setting, independent from the editor preview.
+const adoGameToolbar=document.querySelector('#game .panel .toolbar');
+if(adoGameToolbar&&!document.getElementById('adoaGameInvincibleToggle')){
+  const gameInvButton=document.createElement('button');
+  gameInvButton.id='adoaGameInvincibleToggle';
+  gameInvButton.className='adoa-invincible';
+  gameInvButton.type='button';
+  gameInvButton.textContent='♾ 무적 모드: 꺼짐';
+  gameInvButton.title='게임 시작 전에 무적 모드를 선택할 수 있습니다.';
+  const playButton=document.getElementById('gamePlay');
+  if(playButton)adoGameToolbar.insertBefore(gameInvButton,playButton);
+  else adoGameToolbar.appendChild(gameInvButton);
+}
+function adoUpdateGameInvincibleButton(){
+  const b=document.getElementById('adoaGameInvincibleToggle');
+  if(!b)return;
+  b.classList.toggle('active',adoGameInvincibleRequested);
+  b.textContent=adoGameInvincibleRequested?'♾ 무적 모드: 켜짐':'♾ 무적 모드: 꺼짐';
+  b.title='게임 시작 전 또는 플레이가 끝난 뒤 다음 플레이를 위해 변경할 수 있습니다.';
+}
+document.getElementById('adoaGameInvincibleToggle')?.addEventListener('click',()=>{
+  const overlay=document.getElementById('gameOverlay');
+  const paused=!gameRunning&&overlay?.textContent==='일시정지';
+  if(gameRunning||paused){toast('플레이 중에는 무적 모드를 변경할 수 없습니다.');return;}
+  adoGameInvincibleRequested=!adoGameInvincibleRequested;
+  adoUpdateGameInvincibleButton();
+  toast(adoGameInvincibleRequested?'게임 무적 모드가 켜졌습니다.':'게임 무적 모드가 꺼졌습니다.');
+});
+const adoOriginalGameStartWithInvincible=startGame;
+startGame=function(){
+  adoOriginalGameStartWithInvincible();
+  adoUpdateGameInvincibleButton();
+};
+adoUpdateGameInvincibleButton();
 
 })();

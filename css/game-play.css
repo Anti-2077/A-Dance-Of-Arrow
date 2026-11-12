@@ -3,3 +3,8 @@
 
 /* Normal play mode has no visible seek bar or editor-return control. */
 #game:not(.adoa-editor-play) .timeline-foot{display:none!important}
+
+/* Independent invincibility toggle for normal gameplay. */
+#adoaGameInvincibleToggle{white-space:nowrap}
+#adoaGameInvincibleToggle.active{background:#4b2c61!important;color:#f4d8ff!important;border-color:#c78cff!important}
+#adoaGameInvincibleToggle:disabled{opacity:.72;cursor:not-allowed}
